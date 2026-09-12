@@ -1,7 +1,7 @@
 set(LAUNCHERGUI_SOURCES LauncherGui.h LauncherGui.cpp)
 
 if(WIN32)
-	add_executable(opensph WIN32 ${LAUNCHERGUI_SOURCES})
+	add_executable(opensph WIN32 ${LAUNCHERGUI_SOURCES} opensph.rc)
 else()
 	add_executable(opensph ${LAUNCHERGUI_SOURCES})
 endif()
