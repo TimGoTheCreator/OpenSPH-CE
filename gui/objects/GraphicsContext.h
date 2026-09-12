@@ -8,6 +8,7 @@
 #include "gui/objects/Color.h"
 #include "post/Plot.h"
 #include "post/Point.h"
+#include <memory>
 #include <wx/dcclient.h>
 #include <wx/dcmemory.h>
 #include <wx/graphics.h>
@@ -16,13 +17,13 @@ NAMESPACE_SPH_BEGIN
 
 class GraphicsPath : public IDrawPath {
 private:
-    SharedPtr<wxGraphicsContext> gc;
+    std::shared_ptr<wxGraphicsContext> gc;
     wxGraphicsMatrix matrix;
     wxGraphicsPath path;
     bool first;
 
 public:
-    explicit GraphicsPath(const SharedPtr<wxGraphicsContext>& gc, const wxGraphicsMatrix& matrix)
+    explicit GraphicsPath(const std::shared_ptr<wxGraphicsContext>& gc, const wxGraphicsMatrix& matrix)
         : gc(gc)
         , matrix(matrix) {
         path = gc->CreatePath();
@@ -53,7 +54,7 @@ public:
 /// \brief Drawing context using wxWidgets implementation of Cairo backend
 class GraphicsContext : public IDrawingContext {
 private:
-    SharedPtr<wxGraphicsContext> gc;
+    std::shared_ptr<wxGraphicsContext> gc;
 
     /// Transformation matrix from plot to device coordinates
     wxGraphicsMatrix matrix;
