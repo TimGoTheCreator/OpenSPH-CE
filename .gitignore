@@ -12,6 +12,8 @@ core
 
 # build folders
 build*/
+dist/
+releases/
 
 # xemacs temporary files
 *.flc
