@@ -1188,6 +1188,153 @@ Expected<Path> VtkOutput::dump(const Storage& storage, const Statistics& stats) 
 }
 
 // ----------------------------------------------------------------------------------------------------------
+// VtkInput
+// ----------------------------------------------------------------------------------------------------------
+
+Outcome VtkInput::load(const Path& path, Storage& storage, Statistics& stats) {
+    std::ifstream ifs(path.native());
+    if (!ifs) {
+        return makeFailed("Cannot open file '{}'", path.string());
+    }
+
+    storage = Storage(Factory::getMaterial(BodySettings::getDefaults()));
+    Array<Vector> positions;
+    Array<Vector> velocities;
+    Array<Float> masses;
+    Array<Float> energies;
+    Array<Float> densities;
+
+    std::string line;
+    bool inPoints = false;
+    bool inPointData = false;
+    std::string currentArrayName;
+
+    while (std::getline(ifs, line)) {
+        // Strip leading whitespace
+        size_t start = line.find_first_not_of(" \t\r\n");
+        if (start == std::string::npos) {
+            continue;
+        }
+        std::string trimmed = line.substr(start);
+
+        if (trimmed.find("<Points>") != std::string::npos) {
+            inPoints = true;
+            continue;
+        }
+        if (trimmed.find("</Points>") != std::string::npos) {
+            inPoints = false;
+            continue;
+        }
+        if (trimmed.find("<PointData") != std::string::npos) {
+            inPointData = true;
+            continue;
+        }
+        if (trimmed.find("</PointData>") != std::string::npos) {
+            inPointData = false;
+            continue;
+        }
+
+        if (trimmed.find("<DataArray") != std::string::npos) {
+            currentArrayName = "";
+            size_t namePos = trimmed.find("Name=\"");
+            if (namePos == std::string::npos) {
+                namePos = trimmed.find("name=\"");
+            }
+            if (namePos != std::string::npos) {
+                size_t valStart = namePos + 6;
+                size_t valEnd = trimmed.find("\"", valStart);
+                if (valEnd != std::string::npos) {
+                    currentArrayName = trimmed.substr(valStart, valEnd - valStart);
+                }
+            }
+            continue;
+        }
+        if (trimmed.find("</DataArray>") != std::string::npos) {
+            currentArrayName = "";
+            continue;
+        }
+
+        if (trimmed[0] == '<') {
+            continue;
+        }
+
+        std::stringstream ss(trimmed);
+        if (inPoints || currentArrayName == "Position" || currentArrayName == "position") {
+            Float x, y, z;
+            while (ss >> x >> y >> z) {
+                positions.push(Vector(x, y, z, 1.0_f));
+            }
+        } else if (currentArrayName == "Velocity" || currentArrayName == "velocity") {
+            Float vx, vy, vz;
+            while (ss >> vx >> vy >> vz) {
+                velocities.push(Vector(vx, vy, vz));
+            }
+        } else if (currentArrayName == "Mass" || currentArrayName == "mass") {
+            Float m;
+            while (ss >> m) {
+                masses.push(m);
+            }
+        } else if (currentArrayName == "Energy" || currentArrayName == "energy") {
+            Float u;
+            while (ss >> u) {
+                energies.push(u);
+            }
+        } else if (currentArrayName == "Density" || currentArrayName == "density") {
+            Float rho;
+            while (ss >> rho) {
+                densities.push(rho);
+            }
+        }
+    }
+
+    if (positions.empty()) {
+        return makeFailed("No point coordinates found in VTK file '{}'", path.string());
+    }
+
+    const Size particleCnt = positions.size();
+    storage.insert<Vector>(QuantityId::POSITION, OrderEnum::SECOND, std::move(positions));
+
+    if (velocities.size() == particleCnt) {
+        storage.getDt<Vector>(QuantityId::POSITION) = std::move(velocities);
+    } else {
+        Array<Vector> v(particleCnt);
+        v.fill(Vector(0._f));
+        storage.getDt<Vector>(QuantityId::POSITION) = std::move(v);
+    }
+
+    if (masses.size() == particleCnt) {
+        storage.insert<Float>(QuantityId::MASS, OrderEnum::ZERO, std::move(masses));
+    } else {
+        Array<Float> m(particleCnt);
+        m.fill(1.0_f);
+        storage.insert<Float>(QuantityId::MASS, OrderEnum::ZERO, std::move(m));
+    }
+
+    if (energies.size() == particleCnt) {
+        storage.insert<Float>(QuantityId::ENERGY, OrderEnum::ZERO, std::move(energies));
+    } else {
+        Array<Float> u(particleCnt);
+        u.fill(0.0_f);
+        storage.insert<Float>(QuantityId::ENERGY, OrderEnum::ZERO, std::move(u));
+    }
+
+    if (densities.size() == particleCnt) {
+        storage.insert<Float>(QuantityId::DENSITY, OrderEnum::ZERO, std::move(densities));
+    } else {
+        Array<Float> rho(particleCnt);
+        rho.fill(1000.0_f);
+        storage.insert<Float>(QuantityId::DENSITY, OrderEnum::ZERO, std::move(rho));
+    }
+
+    Array<Float> sml(particleCnt);
+    sml.fill(1.0_f);
+    storage.insert<Float>(QuantityId::SMOOTHING_LENGTH, OrderEnum::ZERO, std::move(sml));
+
+    stats.set(StatisticsId::RUN_TIME, 0.0_f);
+    return SUCCESS;
+}
+
+// ----------------------------------------------------------------------------------------------------------
 // Hdf5Input
 // ----------------------------------------------------------------------------------------------------------
 

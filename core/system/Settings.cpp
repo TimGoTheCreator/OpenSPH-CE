@@ -435,7 +435,7 @@ Flags<IoCapability> getIoCapabilities(const IoEnum type) {
     case IoEnum::PKDGRAV_INPUT:
         return IoCapability::INPUT | IoCapability::OUTPUT;
     case IoEnum::VTK_FILE:
-        return IoCapability::OUTPUT;
+        return IoCapability::INPUT | IoCapability::OUTPUT;
     case IoEnum::HDF5_FILE:
         return IoCapability::INPUT | IoCapability::OUTPUT;
     case IoEnum::GADGET_HDF5_FILE:

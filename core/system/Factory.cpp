@@ -656,8 +656,10 @@ AutoPtr<IInput> Factory::getInput(const Path& path) {
         return makeAuto<BinaryInput>();
     } else if (ext == "sdf" || ext == "scf") { // .scf is an older extension of this format
         return makeAuto<CompressedInput>();
-    } else if (ext == "h5") {
+    } else if (ext == "h5" || ext == "hdf5") {
         return makeAuto<Hdf5Input>();
+    } else if (ext == "vtu" || ext == "vtk") {
+        return makeAuto<VtkInput>();
     } else if (ext == "tab") {
         return makeAuto<TabInput>();
     } else if (ext == "dat") {
