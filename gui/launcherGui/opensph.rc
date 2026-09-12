@@ -1,0 +1,32 @@
+#include <windows.h>
+
+IDI_ICON1 ICON "opensph.ico"
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION     0,5,0,0
+PRODUCTVERSION  0,5,0,0
+FILEFLAGSMASK   VS_FFI_FILEFLAGSMASK
+FILEFLAGS       0x0L
+FILEOS          VOS_NT_WINDOWS32
+FILETYPE        VFT_APP
+FILESUBTYPE     VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904b0"
+        BEGIN
+            VALUE "CompanyName",      "OpenSPH Community"
+            VALUE "FileDescription",  "OpenSPH Community Edition"
+            VALUE "FileVersion",      "0.5.0.0"
+            VALUE "InternalName",     "opensph.exe"
+            VALUE "LegalCopyright",   "Copyright (c) 2018 Pavel Sevecek, 2026 Tymofiy Zakharchuk"
+            VALUE "OriginalFilename", "opensph.exe"
+            VALUE "ProductName",      "OpenSPH-CE"
+            VALUE "ProductVersion",   "0.5.0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END
