@@ -13,6 +13,7 @@ core
 # build folders
 build*/
 dist/
+dist2/
 releases/
 
 # xemacs temporary files
