@@ -9,6 +9,7 @@ set(CORE_SOURCES
     io/FileSystem.cpp 
     io/Logger.cpp 
     io/Output.cpp 
+    io/Alembic.cpp
     io/Vdb.cpp
     io/Path.cpp 
     math/Curve.cpp 
@@ -342,6 +343,12 @@ set(CORE_HEADERS
 add_library(core STATIC ${CORE_HEADERS} ${CORE_SOURCES})
 
 set(CORE_LIBRARIES ${TBB_LIBRARIES} ${OpenVDB_ALL_LIBRARIES} ${CHAISCRIPT_LIBRARIES})
+if (WITH_ALEMBIC)
+    list(APPEND CORE_LIBRARIES Alembic::Alembic)
+endif()
+if (WITH_HDF5)
+    list(APPEND CORE_LIBRARIES ${HDF5_LIBRARIES})
+endif()
 target_link_libraries(core PRIVATE ${CORE_LIBRARIES})
 
 if (NOT WIN32 AND NOT WITH_TBB)

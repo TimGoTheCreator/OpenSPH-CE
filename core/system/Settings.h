@@ -895,6 +895,12 @@ enum class IoEnum {
 
     /// OpenVDB grid
     VDB_FILE = 9,
+
+    /// Alembic point cache or geometry
+    ALEMBIC_FILE = 10,
+
+    /// Cosmological snapshot in GADGET / SWIFT / AREPO HDF5 format
+    GADGET_HDF5_FILE = 11,
 };
 
 /// \brief Returns the file extension associated with given IO type.

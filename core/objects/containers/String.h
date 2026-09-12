@@ -10,6 +10,7 @@
 #include "objects/containers/StaticArray.h"
 #include "objects/wrappers/Flags.h"
 #include <cstring>
+#include <string>
 
 NAMESPACE_SPH_BEGIN
 
@@ -87,6 +88,13 @@ public:
     }
 
     String(const wchar_t* s);
+
+    String(const std::wstring& wstr)
+        : String(wstr.c_str()) {}
+
+    template <typename TString, typename = std::enable_if_t<!std::is_same<std::decay_t<TString>, String>::value && !std::is_pointer<std::decay_t<TString>>::value>>
+    explicit String(const TString& s)
+        : String(s.wc_str()) {}
 
     String(const wchar_t c) {
         data.insert(0, c);

@@ -1,5 +1,4 @@
 set(GUI_SOURCES
-    Allocation.cpp
     Controller.cpp 
     Factory.cpp 
     MainLoop.cpp 

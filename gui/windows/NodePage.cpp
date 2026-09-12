@@ -1951,6 +1951,13 @@ NodeWindow::NodeWindow(wxWindow* parent, SharedPtr<INodeManagerCallbacks> callba
                     // settings.set("name", "Load '" + path->fileName().native() + "'");
                 }
             }
+            if (RawPtr<FileSequenceJob> seq = dynamicCast<FileSequenceJob>(job.get())) {
+                Optional<Path> path = doOpenFileDialog("Load sequence", getInputFormats());
+                if (path) {
+                    VirtualSettings settings = seq->getSettings();
+                    settings.set("first_file", path.value());
+                }
+            }
             if (RawPtr<SaveFileJob> saver = dynamicCast<SaveFileJob>(job.get())) {
                 Optional<Path> path = doSaveFileDialog("Save file", getOutputFormats());
                 if (path) {

@@ -15,20 +15,23 @@
 
 NAMESPACE_SPH_BEGIN
 
-const static FlatMap<PlotEnum, wxString> sPlotTypes(ELEMENTS_UNIQUE,
-    {
-        { PlotEnum::TOTAL_MOMENTUM, "Total momentum" },
-        { PlotEnum::TOTAL_ANGULAR_MOMENTUM, "Total angular momentum" },
-        { PlotEnum::INTERNAL_ENERGY, "Total internal energy" },
-        { PlotEnum::KINETIC_ENERGY, "Total kinetic energy" },
-        { PlotEnum::TOTAL_ENERGY, "Total energy" },
-        { PlotEnum::RELATIVE_ENERGY_CHANGE, "Relative change of total energy" },
-        { PlotEnum::CURRENT_SFD, "Current SFD" },
-        { PlotEnum::PREDICTED_SFD, "Predicted SFD" },
-        { PlotEnum::SPEED_HISTOGRAM, "Speed histogram" },
-        { PlotEnum::ANGULAR_HISTOGRAM_OF_VELOCITIES, "Angular histogram of velocities" },
-        { PlotEnum::SELECTED_PARTICLE, "Selected particle" },
-    });
+static const FlatMap<PlotEnum, wxString>& getPlotTypes() {
+    const static FlatMap<PlotEnum, wxString> sPlotTypes(ELEMENTS_UNIQUE,
+        {
+            { PlotEnum::TOTAL_MOMENTUM, "Total momentum" },
+            { PlotEnum::TOTAL_ANGULAR_MOMENTUM, "Total angular momentum" },
+            { PlotEnum::INTERNAL_ENERGY, "Total internal energy" },
+            { PlotEnum::KINETIC_ENERGY, "Total kinetic energy" },
+            { PlotEnum::TOTAL_ENERGY, "Total energy" },
+            { PlotEnum::RELATIVE_ENERGY_CHANGE, "Relative change of total energy" },
+            { PlotEnum::CURRENT_SFD, "Current SFD" },
+            { PlotEnum::PREDICTED_SFD, "Predicted SFD" },
+            { PlotEnum::SPEED_HISTOGRAM, "Speed histogram" },
+            { PlotEnum::ANGULAR_HISTOGRAM_OF_VELOCITIES, "Angular histogram of velocities" },
+            { PlotEnum::SELECTED_PARTICLE, "Selected particle" },
+        });
+    return sPlotTypes;
+}
 
 GuiSettingsDialog::GuiSettingsDialog(wxWindow* parent)
     : wxDialog(parent, wxID_ANY, "Visualization settings", wxDefaultPosition, wxSize(500, 340)) {
@@ -72,7 +75,7 @@ GuiSettingsDialog::GuiSettingsDialog(wxWindow* parent)
     const Flags<PlotEnum> plotFlags = gui.getFlags<PlotEnum>(GuiSettingsId::PLOT_INTEGRALS);
     wxCheckBox* sfdCheck1 = nullptr;
     wxCheckBox* sfdCheck2 = nullptr;
-    for (const auto& p : sPlotTypes) {
+    for (const auto& p : getPlotTypes()) {
         wxCheckBox* check = new wxCheckBox(plotBox->GetStaticBox(), wxID_ANY, p.value());
         check->SetValue(plotFlags.has(p.key()));
         if (p.key() == PlotEnum::CURRENT_SFD) {
@@ -156,7 +159,7 @@ void GuiSettingsDialog::commit() {
     gui.set(GuiSettingsId::PLOT_INTEGRALS, enabledPlots);
 
     gui.set(GuiSettingsId::PLOT_INITIAL_PERIOD, Float(periodCtrl->getValue()));
-    gui.set(GuiSettingsId::PLOT_OVERPLOT_SFD, String(overplotPath->GetValue()));
+    gui.set(GuiSettingsId::PLOT_OVERPLOT_SFD, String(overplotPath->GetValue().wc_str()));
     gui.set(GuiSettingsId::RAYTRACE_SUBSAMPLING, subsamplingSpinner->GetValue());
 
     this->EndModal(wxID_OK);

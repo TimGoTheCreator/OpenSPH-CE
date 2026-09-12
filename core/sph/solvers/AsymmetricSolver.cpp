@@ -182,12 +182,20 @@ void AsymmetricSolver::loop(Storage& storage, Statistics& UNUSED(stats)) {
         actFinder.findAll(i, radius, data.neighs);
         data.grads.clear();
         data.idxs.clear();
-        for (auto& n : data.neighs) {
+        const Size neighCount = data.neighs.size();
+        data.grads.reserve(neighCount);
+        data.idxs.reserve(neighCount);
+
+        const Float hi = r[i][H];
+        const Float kernelRadius = kernel.radius();
+
+        for (const auto& n : data.neighs) {
             const Size j = n.index;
-            const Float hbar = 0.5_f * (r[i][H] + r[j][H]);
-            SPH_ASSERT(hbar > EPS, hbar);
-            if (i == j || n.distanceSqr >= sqr(kernel.radius() * hbar)) {
-                // aren't actual neighbors
+            if (i == j) {
+                continue;
+            }
+            const Float hbar = 0.5_f * (hi + r[j][H]);
+            if (n.distanceSqr >= sqr(kernelRadius * hbar)) {
                 continue;
             }
             const Vector gr = symmetrizedKernel.grad(r[i], r[j]);

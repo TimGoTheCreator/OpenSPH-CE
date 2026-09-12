@@ -47,6 +47,10 @@
 #include "io/Vdb.h"
 #endif
 
+#ifdef SPH_USE_ALEMBIC
+#include "io/Alembic.h"
+#endif
+
 NAMESPACE_SPH_BEGIN
 
 AutoPtr<IEos> Factory::getEos(const BodySettings& body) {
@@ -629,9 +633,17 @@ AutoPtr<IOutput> Factory::getOutput(const RunSettings& settings) {
         pkd.omega = settings.get<Vector>(RunSettingsId::FRAME_ANGULAR_FREQUENCY);
         return makeAuto<PkdgravOutput>(file, std::move(pkd));
     }
+    case IoEnum::HDF5_FILE:
+        return makeAuto<Hdf5Output>(file);
+    case IoEnum::GADGET_HDF5_FILE:
+        return makeAuto<GadgetHdf5Output>(file);
 #ifdef SPH_USE_VDB
     case IoEnum::VDB_FILE:
         return makeAuto<VdbOutput>(file);
+#endif
+#ifdef SPH_USE_ALEMBIC
+    case IoEnum::ALEMBIC_FILE:
+        return makeAuto<AlembicOutput>(file);
 #endif
     default:
         NOT_IMPLEMENTED;
@@ -650,6 +662,10 @@ AutoPtr<IInput> Factory::getInput(const Path& path) {
         return makeAuto<TabInput>();
     } else if (ext == "dat") {
         return makeAuto<MpcorpInput>();
+#ifdef SPH_USE_ALEMBIC
+    } else if (ext == "abc") {
+        return makeAuto<AlembicInput>();
+#endif
     } else {
         if (ext.size() > 3 && ext.substr(ext.size() - 3) == ".bt") {
             return makeAuto<PkdgravInput>();

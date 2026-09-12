@@ -13,15 +13,23 @@ bool App::OnInit() {
 
     this->Connect(MAIN_LOOP_TYPE, MainLoopEventHandler(App::processEvents));
 
-    if (wxTheApp->argc > 1) {
-        Path path(String::fromUtf8(wxTheApp->argv[1]));
-        window = new MainWindow(path);
-    } else {
-        window = new MainWindow();
+    try {
+        if (wxTheApp->argc > 1) {
+            Path path(String(wxTheApp->argv[1].wc_str()));
+            window = new MainWindow(path);
+        } else {
+            window = new MainWindow();
+        }
+        window->SetAutoLayout(true);
+        window->Show();
+        return true;
+    } catch (const std::exception& e) {
+        wxMessageBox(e.what(), "OpenSPH Error", wxOK | wxICON_ERROR);
+        return false;
+    } catch (...) {
+        wxMessageBox("Unknown initialization error", "OpenSPH Error", wxOK | wxICON_ERROR);
+        return false;
     }
-    window->SetAutoLayout(true);
-    window->Show();
-    return true;
 }
 
 int App::OnExit() {

@@ -37,7 +37,7 @@ NAMESPACE_SPH_BEGIN
 #define INLINE inline
 #define INL
 #else
-#ifdef SPH_WIN
+#if defined(_MSC_VER)
 #define INLINE __forceinline
 #define INL
 #else
@@ -47,13 +47,13 @@ NAMESPACE_SPH_BEGIN
 #endif
 
 /// No inline
-#ifdef SPH_WIN
-#define NO_INLINE __declspec(noinline)
+#if defined(_MSC_VER)
+#define NOINLINE __declspec(noinline)
 #else
-#define NO_INLINE __attribute__((noinline))
+#define NOINLINE __attribute__((noinline))
 #endif
 
-#ifdef SPH_WIN
+#if defined(_MSC_VER)
 #define SPH_MAY_ALIAS
 #else
 #define SPH_MAY_ALIAS __attribute__((__may_alias__))
@@ -84,7 +84,7 @@ NAMESPACE_SPH_BEGIN
 #endif
 
 /// Printing function names in assertions
-#ifdef SPH_WIN
+#if defined(_MSC_VER)
 #define SPH_PRETTY_FUNCTION __FUNCSIG__
 #else
 #define SPH_PRETTY_FUNCTION __PRETTY_FUNCTION__

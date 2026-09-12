@@ -167,11 +167,16 @@ void EnergyConservingSolver::loop(Storage& storage, Statistics& UNUSED(stats)) {
         neighList[i].clear();
         gradList[i].clear();
 
-        for (auto& n : data.neighs) {
+        const Float hi = r[i][H];
+        const Float kernelRadius = kernel.radius();
+
+        for (const auto& n : data.neighs) {
             const Size j = n.index;
-            const Float hbar = 0.5_f * (r[i][H] + r[j][H]);
-            SPH_ASSERT(hbar > EPS, hbar);
-            if (i == j || getSqrLength(r[i] - r[j]) >= sqr(kernel.radius() * hbar)) {
+            if (i == j) {
+                continue;
+            }
+            const Float hbar = 0.5_f * (hi + r[j][H]);
+            if (n.distanceSqr >= sqr(kernelRadius * hbar)) {
                 // aren't actual neighbors
                 continue;
             }
