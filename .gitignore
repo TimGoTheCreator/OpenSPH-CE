@@ -857,7 +857,9 @@ FodyWeavers.xsd
 ### VisualStudio Patch ###
 # Additional files built by Visual Studio
 
-## Images
+# End of https://www.toptal.com/developers/gitignore/api/qt,git,c++,linux,cmake,macos,emacs,python,windows,qtcreator,visualstudio,vim
+
+# Images
 *.jpg
 *.png
 *.jpeg
@@ -873,4 +875,3 @@ FodyWeavers.xsd
 *.ps
 *.ai
 *.cdr
-# End of https://www.toptal.com/developers/gitignore/api/qt,git,c++,linux,cmake,macos,emacs,python,windows,qtcreator,visualstudio,vim

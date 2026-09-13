@@ -29,8 +29,6 @@ Optional<float> DirectionColorizer::evalScalar(const Size idx) const {
     return float(PI + atan2(y, x));
 }
 
-static thread_local Array<NeighborRecord> neighs;
-
 SummedDensityColorizer::SummedDensityColorizer(const RunSettings& settings, Palette palette)
     : palette(std::move(palette)) {
     finder = Factory::getFinder(settings);
@@ -45,6 +43,7 @@ void SummedDensityColorizer::initialize(const Storage& storage, const RefEnum re
 }
 
 float SummedDensityColorizer::sum(const Size idx) const {
+    Array<NeighborRecord> neighs;
     finder->findAll(idx, r[idx][H] * kernel.radius(), neighs);
     Float rho = 0._f;
     for (const auto& n : neighs) {

@@ -6,6 +6,7 @@
 /// \date 2016-2021
 
 #include "io/Logger.h"
+#include "objects/containers/StaticArray.h"
 #include "objects/finders/NeighborFinder.h"
 #include "objects/geometry/Box.h"
 #include "objects/utility/IteratorAdapters.h"

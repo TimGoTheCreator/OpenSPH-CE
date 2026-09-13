@@ -16,7 +16,7 @@ SharedPtr<Tbb> Tbb::globalInstance = nullptr;
 class TbbTask;
 
 struct TbbThreadContext {
-    SharedPtr<TbbTask> task;
+    TbbTask* task = nullptr;
 };
 
 static thread_local TbbThreadContext tbbThreadContext;
@@ -50,7 +50,7 @@ public:
     void submit(const Function<void()>& task) {
         arena.execute([this, task] {
             group.run([this, task] {
-                tbbThreadContext.task = this->sharedFromThis();
+                tbbThreadContext.task = this;
                 task();
                 tbbThreadContext.task = nullptr;
 
@@ -104,7 +104,7 @@ SharedPtr<ITask> Tbb::submit(const Function<void()>& task) {
         tbbThreadContext.task->submitChild(task);
         /// \todo this works differently than ThreadPool! Refactor if it's ever necessary to wait for child
         /// tasks!!
-        return tbbThreadContext.task;
+        return tbbThreadContext.task->sharedFromThis();
     } else {
         SharedPtr<TbbTask> handle = makeShared<TbbTask>(data->arena);
         handle->submit(task);

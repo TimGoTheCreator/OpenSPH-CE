@@ -13,7 +13,7 @@ struct ThreadContext {
     Size index = Size(-1);
 
     /// Task currently processed by this thread
-    SharedPtr<Task> current = nullptr;
+    Task* current = nullptr;
 };
 
 static thread_local ThreadContext threadLocalContext;
@@ -58,7 +58,7 @@ SharedPtr<Task> Task::getParent() const {
 }
 
 SharedPtr<Task> Task::getCurrent() {
-    return threadLocalContext.current;
+    return threadLocalContext.current ? threadLocalContext.current->sharedFromThis() : nullptr;
 }
 
 void Task::setParent(SharedPtr<Task> task) {
@@ -83,8 +83,8 @@ void Task::setException(std::exception_ptr exception) {
 void Task::runAndNotify() {
     // this may be called from within another task, so we override the threadLocalContext.current for
     // this scope only
-    SharedPtr<Task> callingTask = threadLocalContext.current;
-    threadLocalContext.current = this->sharedFromThis();
+    Task* callingTask = threadLocalContext.current;
+    threadLocalContext.current = this;
     auto guard = finally([this, callingTask] {
         threadLocalContext.current = callingTask;
         this->removeReference();
@@ -156,7 +156,7 @@ ThreadPool::~ThreadPool() {
 
 SharedPtr<ITask> ThreadPool::submit(const Function<void()>& task) {
     SharedPtr<Task> handle = makeShared<Task>(task);
-    handle->setParent(threadLocalContext.current);
+    handle->setParent(threadLocalContext.current ? threadLocalContext.current->sharedFromThis() : nullptr);
 
     {
         std::unique_lock<std::mutex> lock(waitMutex);

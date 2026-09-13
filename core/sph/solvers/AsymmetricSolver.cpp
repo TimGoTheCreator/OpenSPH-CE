@@ -16,8 +16,13 @@ void RadiiHashMap::build(ArrayView<const Vector> r, const Float kernelRadius) {
     for (Size i = 0; i < r.size(); ++i) {
         cellSize = max(cellSize, r[i][H] * kernelRadius);
     }
+    if (cellSize <= 0._f || r.empty()) {
+        map.clear();
+        return;
+    }
 
     std::unordered_map<Indices, Float, std::hash<Indices>, IndicesEqual> newMap;
+    newMap.reserve(r.size());
     for (Size i = 0; i < r.size(); ++i) {
         // floor needed to properly handle negative values
         const Indices idxs = floor(r[i] / cellSize);
@@ -27,6 +32,7 @@ void RadiiHashMap::build(ArrayView<const Vector> r, const Float kernelRadius) {
 
     // create map by dilating newMap
     map.clear();
+    map.reserve(newMap.size());
     for (const auto& p : newMap) {
         const Indices& idxs0 = p.first;
         Float radius = p.second;
@@ -46,6 +52,9 @@ void RadiiHashMap::build(ArrayView<const Vector> r, const Float kernelRadius) {
 }
 
 Float RadiiHashMap::getRadius(const Vector& r) const {
+    if (cellSize <= 0._f || map.empty()) {
+        return 0._f;
+    }
     const Indices idxs = floor(r / cellSize);
     Float radius = 0._f;
     const auto iter = map.find(idxs);
@@ -172,8 +181,10 @@ void AsymmetricSolver::loop(Storage& storage, Statistics& UNUSED(stats)) {
     SymmetrizeSmoothingLengths<const LutKernel<DIMENSIONS>&> symmetrizedKernel(kernel);
 
     auto functor = [this, r, &neighs, maxRadius, &symmetrizedKernel, &actFinder](Size i, ThreadData& data) {
-        // max possible radius of r[j]
-        const Float neighborRadius = radiiMap ? radiiMap->getRadius(r[i]) : maxRadius;
+        Float neighborRadius = radiiMap ? radiiMap->getRadius(r[i]) : maxRadius;
+        if (neighborRadius <= 0._f) {
+            neighborRadius = maxRadius;
+        }
         SPH_ASSERT(neighborRadius > 0._f);
 
         // max possible value of kernel.radius() * hbar

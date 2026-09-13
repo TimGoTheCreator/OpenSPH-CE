@@ -306,11 +306,6 @@ struct ProcessedNode {
     Float distanceSqr;
 };
 
-/// \brief Cached stack to avoid reallocation
-///
-/// It is thread_local to allow using KdTree from multiple threads
-extern thread_local Array<ProcessedNode> nodeStack;
-
 template <typename TNode, typename TMetric>
 template <bool FindAll>
 Size KdTree<TNode, TMetric>::find(const Vector& r0,
@@ -326,7 +321,7 @@ Size KdTree<TNode, TMetric>::find(const Vector& r0,
     const Float l1 = l1Norm(maxDistSqr);
     ProcessedNode node{ 0, maxDistSqr, l1 };
 
-    SPH_ASSERT(nodeStack.empty()); // not sure if there can be some nodes from previous search ...
+    StaticArray<ProcessedNode, 128> nodeStack(EMPTY_ARRAY);
 
     TMetric metric;
     while (node.distanceSqr < radiusSqr) {

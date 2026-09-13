@@ -123,9 +123,9 @@ MainWindow::MainWindow(const Path& openPath)
     : wxFrame(nullptr,
           wxID_ANY,
 #ifdef SPH_DEBUG
-          wxString("OpenSPH - build: ") + __DATE__ + " (DEBUG)",
+          wxString("OpenSPH: Community Edition - build: ") + __DATE__ + " (DEBUG)",
 #else
-          wxString("OpenSPH - build: ") + __DATE__,
+          wxString("OpenSPH: Community Edition - build: ") + __DATE__,
 #endif
           wxDefaultPosition,
           wxSize(1024, 768)) {
@@ -191,12 +191,12 @@ MainWindow::MainWindow(const Path& openPath)
         switch (evt.GetId()) {
         case 6000: {
             wxAboutDialogInfo info;
-            info.SetName("OpenSPH");
-            info.SetVersion(SPH_CODE_VERSION);
+            info.SetName("OpenSPH: Community Edition");
+            info.SetVersion(("v0.1.1 (" + String(SPH_CODE_VERSION) + ")").toUnicode());
 
             const String desc = getEnabledFeatures();
             info.SetDescription(desc.toUnicode());
-            info.SetCopyright(L"Pavel \u0160eve\u010Dek <sevecek@sirrah.troja.mff.cuni.cz>");
+            info.SetCopyright(L"(c) 2016-2021 Pavel \u0160eve\u010Dek\n(c) 2026 Tymofiy Zakharchuk");
 
             wxAboutBox(info);
             break;

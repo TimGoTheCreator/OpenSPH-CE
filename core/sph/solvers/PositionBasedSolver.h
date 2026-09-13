@@ -20,7 +20,6 @@ private:
     Array<Float> rho0;
     Array<Vector> drho1;
     Array<Float> lambda;
-    Array<Vector> dp;
 
     Size iterCnt;
     Float eps;

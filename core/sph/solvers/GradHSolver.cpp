@@ -59,7 +59,7 @@ public:
                 -dot(r_ji, kernel.grad(r_ji, h_j)) - DIMENSIONS / h_j * kernel.value(r_ji, h_j);
             sum += dWij_dh;
         }
-        // add term for i=j (right?)
+        // Self-contribution term for i == j (at r = 0, r * grad(W) is zero)
         sum += -DIMENSIONS / r[i][H] * kernel.value(Vector(0._f), r[i][H]);
 
         omega[i] = 1._f + r[i][H] / (3._f * rho[i]) * sum;
@@ -100,11 +100,14 @@ void GradHSolver::loop(Storage& storage, Statistics& UNUSED(stats)) {
     for (Size i = 0; i < r.size(); ++i) {
         maxH = max(maxH, r[i][H]);
     }
-    const Float radius = maxH * kernel.radius();
+    const Float maxRadius = maxH * kernel.radius();
 
     // compute the grad-h terms
     GradH gradH(storage);
-    auto preFunctor = [this, radius, &finder, &gradH](const Size i, ThreadData& data) {
+    auto preFunctor = [this, maxRadius, &finder, &gradH, r](const Size i, ThreadData& data) {
+        // Particle i needs neighbours j within radius where W(r_ji, h_j) > 0.
+        // Since h_j <= maxH, searching within maxRadius or 0.5 * (r[i][H] + maxH) * kernel.radius()
+        const Float radius = 0.5_f * (r[i][H] * kernel.radius() + maxRadius);
         finder.findAll(i, radius, data.neighs);
         gradH.eval(kernel, i, data.neighs);
     };
@@ -113,7 +116,8 @@ void GradHSolver::loop(Storage& storage, Statistics& UNUSED(stats)) {
     ArrayView<Size> neighs = storage.getValue<Size>(QuantityId::NEIGHBOR_CNT);
     ArrayView<Float> omega = storage.getValue<Float>(QuantityId::GRAD_H);
 
-    auto functor = [this, r, &finder, &neighs, omega, radius](const Size i, ThreadData& data) {
+    auto functor = [this, r, &finder, &neighs, omega, maxRadius](const Size i, ThreadData& data) {
+        const Float radius = 0.5_f * (r[i][H] * kernel.radius() + maxRadius);
         finder.findAll(i, radius, data.neighs);
         data.idxs.clear();
         data.grads.clear();
@@ -121,11 +125,20 @@ void GradHSolver::loop(Storage& storage, Statistics& UNUSED(stats)) {
         Array<Vector>& secondGrads = secondData.local().grads;
         secondGrads.clear();
 
+        const Size neighCount = data.neighs.size();
+        data.idxs.reserve(neighCount);
+        data.grads.reserve(neighCount);
+        secondGrads.reserve(neighCount);
+
+        const Float invOmegaI = 1._f / omega[i];
+        const Float hi = r[i][H];
+
         for (auto& n : data.neighs) {
             const Size j = n.index;
-            const Vector gradi = 1._f / omega[i] * kernel.grad(r[i] - r[j], r[i][H]);
+            const Float hj = r[j][H];
+            const Vector gradi = invOmegaI * kernel.grad(r[i] - r[j], hi);
             SPH_ASSERT(isReal(gradi) && dot(gradi, r[i] - r[j]) <= 0._f, gradi, r[i] - r[j]);
-            const Vector gradj = 1._f / omega[j] * kernel.grad(r[j] - r[i], r[j][H]);
+            const Vector gradj = (1._f / omega[j]) * kernel.grad(r[j] - r[i], hj);
             SPH_ASSERT(isReal(gradj) && dot(gradj, r[j] - r[i]) <= 0._f, gradj, r[j] - r[i]);
             data.idxs.emplaceBack(j);
             data.grads.emplaceBack(gradi);

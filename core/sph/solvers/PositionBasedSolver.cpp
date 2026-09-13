@@ -24,8 +24,8 @@ PositionBasedSolver::PositionBasedSolver(IScheduler& scheduler, const RunSetting
 PositionBasedSolver::~PositionBasedSolver() = default;
 
 void PositionBasedSolver::integrate(Storage& storage, Statistics& stats) {
-    parallelInvoke(
-        scheduler, [&] { this->evalHydro(storage, stats); }, [&] { this->evalGravity(storage, stats); });
+    this->evalGravity(storage, stats);
+    this->evalHydro(storage, stats);
 }
 
 void PositionBasedSolver::evalHydro(Storage& storage, Statistics& stats) {
@@ -35,9 +35,18 @@ void PositionBasedSolver::evalHydro(Storage& storage, Statistics& stats) {
 
     const Float dt = stats.get<Float>(StatisticsId::TIMESTEP_VALUE);
 
-    // predict positions
+    // predict positions including external forces (gravity)
     Array<Vector> r1(r.size());
-    parallelFor(scheduler, 0, r.size(), [&r, &r1, &v, dt](Size i) { r1[i] = r[i] + v[i] * dt; });
+    if (dv.empty()) {
+        parallelFor(scheduler, 0, r.size(), [&r, &r1, &v, dt](Size i) {
+            r1[i] = r[i] + v[i] * dt;
+        });
+    } else {
+        parallelFor(scheduler, 0, r.size(), [&r, &r1, &v, &dv, dt](Size i) {
+            v[i] += dv[i] * dt;
+            r1[i] = r[i] + v[i] * dt;
+        });
+    }
 
     // find neighbors
     finder->build(scheduler, r1);
@@ -45,14 +54,20 @@ void PositionBasedSolver::evalHydro(Storage& storage, Statistics& stats) {
     ThreadLocal<Array<NeighborRecord>> neighsTl(scheduler);
     parallelFor(scheduler, neighsTl, 0, r.size(), [this, &r1](Size i, Array<NeighborRecord>& neighs) {
         finder->findAll(r1[i], r1[i][H], neighs);
-        neighbors[i].resize(neighs.size());
+        neighbors[i].clear();
+        neighbors[i].reserve(neighs.size());
         for (Size j = 0; j < neighs.size(); ++j) {
-            neighbors[i][j] = neighs[j].index;
+            neighbors[i].push(neighs[j].index);
         }
     });
 
     ArrayView<const Float> m = storage.getValue<Float>(QuantityId::MASS);
     ArrayView<Float> rho1 = storage.getValue<Float>(QuantityId::DENSITY);
+
+    // Pre-allocate iteration buffers once instead of on every iteration
+    drho1.resize(r.size());
+    lambda.resize(r.size());
+
     for (Size iter = 0; iter < iterCnt; ++iter) {
         doIteration(r1, rho1, m);
     }
@@ -79,7 +94,6 @@ void PositionBasedSolver::create(Storage& storage, IMaterial& UNUSED(material)) 
 }
 
 void PositionBasedSolver::doIteration(Array<Vector>& r1, ArrayView<Float> rho1, ArrayView<const Float> m) {
-    drho1.resize(rho1.size());
     parallelFor(scheduler, 0, r1.size(), [this, &r1, &rho1, &m](Size i) {
         rho1[i] = 0;
         drho1[i] = Vector(0._f);
@@ -88,11 +102,11 @@ void PositionBasedSolver::doIteration(Array<Vector>& r1, ArrayView<Float> rho1, 
             drho1[i] += m[j] * spiky.grad(r1[i] - r1[j], r1[j][H]);
         }
     });
+
     if (rho0.empty()) {
-        // lazy initialization
         rho0.pushAll(rho1.begin(), rho1.end());
     }
-    lambda.resize(r1.size());
+
     parallelFor(scheduler, 0, r1.size(), [this, &rho1, &r1](Size i) {
         const Float C = rho1[i] / rho0[i] - 1;
         Float sumGradC = 0;
@@ -101,15 +115,14 @@ void PositionBasedSolver::doIteration(Array<Vector>& r1, ArrayView<Float> rho1, 
         }
         lambda[i] = -C / (sumGradC + eps / sqr(r1[i][H]));
     });
-    dp.resize(r1.size());
-    parallelFor(scheduler, 0, r1.size(), [this, &r1](Size i) {
-        dp[i] = Vector(0._f);
+
+    // Fused loop: compute delta position and update r1 directly (saves memory & 1 thread barrier per iteration)
+    parallelFor(scheduler, 0, r1.size(), [this, &r1, &m](Size i) {
+        Vector delta(0._f);
         for (Size j : neighbors[i]) {
-            dp[i] += (lambda[i] + lambda[j]) * spiky.grad(r1[i] - r1[j], r1[j][H]);
+            delta += (lambda[i] + lambda[j]) * spiky.grad(r1[i] - r1[j], r1[j][H]);
         }
-    });
-    parallelFor(scheduler, 0, r1.size(), [this, &r1, &m](Size i) { //
-        r1[i] += m[i] / rho0[i] * dp[i];
+        r1[i] += (m[i] / rho0[i]) * delta;
     });
 }
 

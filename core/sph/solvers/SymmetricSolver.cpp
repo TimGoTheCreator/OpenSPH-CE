@@ -121,11 +121,13 @@ void SymmetricSolver<Dim>::loop(Storage& storage, Statistics& UNUSED(stats)) {
         finder->findLowerRank(i, r[i][H] * kernel.radius(), data.neighs);
         data.grads.clear();
         data.idxs.clear();
+        data.grads.reserve(data.neighs.size());
+        data.idxs.reserve(data.neighs.size());
         for (auto& n : data.neighs) {
             const Size j = n.index;
             const Float hbar = 0.5_f * (r[i][H] + r[j][H]);
             SPH_ASSERT(hbar > EPS && hbar <= r[i][H], hbar, r[i][H]);
-            if (getSqrLength(r[i] - r[j]) >= sqr(kernel.radius() * hbar)) {
+            if (n.distanceSqr >= sqr(kernel.radius() * hbar)) {
                 // aren't actual neighbors
                 continue;
             }

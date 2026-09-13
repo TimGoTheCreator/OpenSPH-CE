@@ -153,7 +153,8 @@ void EnergyConservingSolver::loop(Storage& storage, Statistics& UNUSED(stats)) {
     // we need to symmetrize kernel in smoothing lenghts to conserve momentum
     SymmetrizeSmoothingLengths<LutKernel<DIMENSIONS>&> symmetrizedKernel(kernel);
 
-    const Float radius = this->getMaxSearchRadius(storage);
+    const Float maxRadius = this->getMaxSearchRadius(storage);
+    const Float kernelRadius = kernel.radius();
 
     const IBasicFinder& finder = *this->getFinder(r);
     // partitioner->initialize(storage);
@@ -162,13 +163,15 @@ void EnergyConservingSolver::loop(Storage& storage, Statistics& UNUSED(stats)) {
     gradList.resize(r.size());
 
     auto evalDerivatives = [&](const Size i, ThreadData& data) {
-        finder.findAll(i, radius, data.neighs);
+        const Float hi = r[i][H];
+        // Maximum interaction distance between particle i and any particle j is (hi + maxH)/2 * kernelRadius
+        const Float searchRadius = 0.5_f * (hi * kernelRadius + maxRadius);
+        finder.findAll(i, searchRadius, data.neighs);
 
         neighList[i].clear();
         gradList[i].clear();
-
-        const Float hi = r[i][H];
-        const Float kernelRadius = kernel.radius();
+        neighList[i].reserve(data.neighs.size());
+        gradList[i].reserve(data.neighs.size());
 
         for (const auto& n : data.neighs) {
             const Size j = n.index;
