@@ -109,7 +109,8 @@ set(CORE_SOURCES
     sph/solvers/ElasticDeformationSolver.cpp 
     sph/solvers/DensityIndependentSolver.cpp 
     run/Config.cpp 
-    run/jobs/Presets.cpp)
+    run/jobs/Presets.cpp
+    run/jobs/ExtraPresets.cpp)
 
 set(CORE_HEADERS 
     Sph.h 
@@ -269,6 +270,7 @@ set(CORE_HEADERS
     run/jobs/ScriptJobs.h 
     run/jobs/SimulationJobs.h 
     run/jobs/Presets.h
+    run/jobs/ExtraPresets.h
     sph/Diagnostics.h 
     sph/Materials.h 
     sph/boundary/Boundary.h 

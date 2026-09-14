@@ -193,13 +193,3 @@ private:
 };
 
 NAMESPACE_SPH_END
-
-Vector evalGradient(ArrayView<const Size> neighs, const Vector& pos) const;
-
-Rgba evalColor(ArrayView<const Size> neighs, const Vector& pos1) const;
-
-Vector evalUvws(ArrayView<const Size> neighs, const Vector& pos1) const;
-}
-;
-
-NAMESPACE_SPH_END

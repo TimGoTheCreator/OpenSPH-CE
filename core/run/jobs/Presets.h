@@ -17,10 +17,14 @@ enum class Id {
     ACCRETION_DISK,
     PLANET_FORMATION,
     SOLAR_SYSTEM,
+    MOON_ORIGIN,
 };
 
 /// \brief Creates a node tree for the preset with given ID.
 SharedPtr<JobNode> make(const Id id, UniqueNameManager& nameMgr, const Size particleCnt = 10000);
+
+/// \brief Creates a node tree for the Giant Impact (Origin of the Moon - Canup 2004 / Kegerreis 2022).
+SharedPtr<JobNode> makeMoonOrigin(UniqueNameManager& nameMgr, const Size particleCnt = 10000);
 
 /// \brief Creates a node tree for basic collision simulation.
 SharedPtr<JobNode> makeAsteroidCollision(UniqueNameManager& nameMgr, const Size particleCnt = 10000);

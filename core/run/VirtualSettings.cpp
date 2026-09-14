@@ -106,6 +106,16 @@ IVirtualEntry::Value VirtualSettings::get(const String& key) const {
     throw InvalidSetup("Key '" + key + "' not found");
 }
 
+RawPtr<IVirtualEntry> VirtualSettings::getEntry(const String& key) const {
+    for (auto& category : categories) {
+        auto entry = category.value().entries.tryGet(key);
+        if (entry) {
+            return entry.value().get();
+        }
+    }
+    return nullptr;
+}
+
 VirtualSettings::Category& VirtualSettings::addCategory(const String& name) {
     return categories.insert(name, Category{});
 }

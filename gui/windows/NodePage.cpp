@@ -24,6 +24,7 @@
 #include "run/SpecialEntries.h"
 #include "run/jobs/IoJobs.h"
 #include "run/jobs/ScriptJobs.h"
+#include "run/jobs/ExtraPresets.h"
 #include "thread/CheckFunction.h"
 #include <wx/dcbuffer.h>
 #include <wx/dirdlg.h>
@@ -1742,6 +1743,26 @@ public:
     }
 };
 
+class CustomPresetTreeData : public wxTreeItemData {
+    CustomPresetDesc desc;
+
+public:
+    explicit CustomPresetTreeData(CustomPresetDesc desc)
+        : desc(std::move(desc)) {}
+
+    SharedPtr<JobNode> create(UniqueNameManager& nameMgr) const {
+        return desc.factory(nameMgr, 10000);
+    }
+
+    String tooltip() const {
+        return desc.tooltip;
+    }
+
+    bool isSph() const {
+        return desc.isSphSim;
+    }
+};
+
 NodeWindow::NodeWindow(wxWindow* parent, SharedPtr<INodeManagerCallbacks> callbacks)
     : wxPanel(parent, wxID_ANY) {
     aui = makeAuto<wxAuiManager>(this);
@@ -1880,6 +1901,25 @@ NodeWindow::NodeWindow(wxWindow* parent, SharedPtr<INodeManagerCallbacks> callba
         addId(id);
     }
 
+    // Register all compile-time extra presets from ExtraPresets.cpp
+    for (const CustomPresetDesc& customPreset : enumerateCustomPresets()) {
+        wxTreeItemId parentId = presetsId;
+        if (!customPreset.category.empty()) {
+            // Put in subcategory under presets if specified
+            if (Optional<wxTreeItemId&> catId = categoryItemIdMap.tryGet(customPreset.category)) {
+                parentId = catId.value();
+            } else {
+                parentId = jobView->AppendItem(presetsId, customPreset.category.toUnicode());
+                categoryItemIdMap.insert(customPreset.category, parentId);
+            }
+        }
+        jobView->AppendItem(parentId,
+            customPreset.name.toUnicode(),
+            -1,
+            -1,
+            new CustomPresetTreeData(customPreset));
+    }
+
     jobView->Bind(wxEVT_MOTION, [this, jobView](wxMouseEvent& evt) {
         wxPoint pos = evt.GetPosition();
         int flags;
@@ -1888,11 +1928,18 @@ NodeWindow::NodeWindow(wxWindow* parent, SharedPtr<INodeManagerCallbacks> callba
         static DelayedCallback callback;
         if (flags & wxTREE_HITTEST_ONITEMLABEL) {
             JobTreeData* data = dynamic_cast<JobTreeData*>(jobView->GetItemData(id));
+            CustomPresetTreeData* presetData = dynamic_cast<CustomPresetTreeData*>(jobView->GetItemData(id));
+            String tooltipText;
             if (data) {
-                callback.start(600, [this, jobView, id, data, pos] {
+                tooltipText = data->tooltip();
+            } else if (presetData) {
+                tooltipText = presetData->tooltip();
+            }
+            if (!tooltipText.empty()) {
+                callback.start(600, [this, jobView, id, tooltipText, pos] {
                     wxRect rect;
                     jobView->GetBoundingRect(id, rect);
-                    String text = setLineBreak(data->tooltip(), 50);
+                    String text = setLineBreak(tooltipText, 50);
                     jobView->showTooltip(pos, rect, id, text);
 
                     nodeEditor->invalidateMousePosition();
@@ -1930,6 +1977,7 @@ NodeWindow::NodeWindow(wxWindow* parent, SharedPtr<INodeManagerCallbacks> callba
                     Presets::Id::CRATERING,
                     Presets::Id::PLANETESIMAL_MERGING,
                     Presets::Id::ACCRETION_DISK,
+                    Presets::Id::MOON_ORIGIN,
                     Presets::GuiId::BLACK_HOLE,
                 });
             static bool defaultSet = false;
@@ -1937,6 +1985,18 @@ NodeWindow::NodeWindow(wxWindow* parent, SharedPtr<INodeManagerCallbacks> callba
                 defaultSet = true;
                 GuiSettings& gui = Project::getInstance().getGuiSettings();
                 gui.set(GuiSettingsId::PARTICLE_RADIUS, 0.35_f);
+            }
+        }
+
+        CustomPresetTreeData* customPresetData = dynamic_cast<CustomPresetTreeData*>(jobView->GetItemData(id));
+        if (customPresetData) {
+            SharedPtr<JobNode> presetNode = customPresetData->create(nameMgr);
+            if (presetNode) {
+                nodeMgr->addNodes(*presetNode);
+                if (customPresetData->isSph()) {
+                    GuiSettings& gui = Project::getInstance().getGuiSettings();
+                    gui.set(GuiSettingsId::PARTICLE_RADIUS, 0.35_f);
+                }
             }
         }
 

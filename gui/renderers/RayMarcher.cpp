@@ -626,5 +626,3 @@ Vector RayMarcher::evalUvws(ArrayView<const Size> neighs, const Vector& pos1) co
 }
 
 NAMESPACE_SPH_END
-
-NAMESPACE_SPH_END

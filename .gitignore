@@ -16,6 +16,10 @@ dist/
 dist2/
 releases/
 
+# local experiment/scratch dirs
+e/
+experiments/
+
 # xemacs temporary files
 *.flc
 

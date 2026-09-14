@@ -37,6 +37,9 @@ static RegisterEnum<Id> sPresetsId({
     { Id::SOLAR_SYSTEM,
         "solar_system",
         "N-body simulation of the Sun and eight planets of our Solar System." },
+    { Id::MOON_ORIGIN,
+        "origin_of_the_moon",
+        "Giant impact of proto-Earth and Theia forming the Moon (Canup 2004 / Kegerreis 2022)." },
 });
 
 }
@@ -60,6 +63,8 @@ SharedPtr<JobNode> Presets::make(const Id id, UniqueNameManager& nameMgr, const 
         return makePlanetFormation(nameMgr, particleCnt);
     case Id::SOLAR_SYSTEM:
         return makeSolarSystem(nameMgr);
+    case Id::MOON_ORIGIN:
+        return makeMoonOrigin(nameMgr, particleCnt);
     default:
         NOT_IMPLEMENTED;
     }
@@ -561,6 +566,95 @@ SharedPtr<JobNode> Presets::makeSolarSystem(UniqueNameManager& nameMgr, const Si
     simSettings.set(RunSettingsId::TIMESTEPPING_MAX_TIMESTEP, 36000._f);
     simSettings.set(RunSettingsId::RUN_END_TIME, Constants::year * 100._f);
     simSettings.set(RunSettingsId::RUN_LOGGER_VERBOSITY, 0);
+    return sim;
+}
+
+SharedPtr<JobNode> Presets::makeMoonOrigin(UniqueNameManager& nameMgr, const Size particleCnt) {
+    CHECK_FUNCTION(CheckFunction::NO_THROW);
+
+    // Particle distribution: ~85% for proto-Earth, ~15% for Theia
+    const Size earthParticles = std::max<Size>(Size(particleCnt * 0.85_f), 100);
+    const Size theiaParticles = std::max<Size>(Size(particleCnt * 0.15_f), 50);
+
+    // Materials: Olivine mantle and Iron core for both bodies (hydrodynamic/dust yielding)
+    SharedPtr<JobNode> mantleMaterial =
+        makeNode<MaterialJob>(nameMgr.getName("dunite mantle"), getMaterial(MaterialEnum::OLIVINE)->getParams());
+    mantleMaterial->getSettings().set(BodySettingsId::RHEOLOGY_YIELDING, EnumWrapper(YieldingEnum::DUST));
+
+    SharedPtr<JobNode> coreMaterial =
+        makeNode<MaterialJob>(nameMgr.getName("iron core"), getMaterial(MaterialEnum::IRON)->getParams());
+    coreMaterial->getSettings().set(BodySettingsId::RHEOLOGY_YIELDING, EnumWrapper(YieldingEnum::DUST));
+
+    // 1. Proto-Earth (Target: ~0.89 - 1.0 M_earth, R_surface = 6000 km, R_core = 3000 km)
+    SharedPtr<JobNode> earthSurface = makeNode<SphereJob>(nameMgr.getName("earth mantle shape"));
+    earthSurface->getSettings().set("radius", 6000._f); // km
+
+    SharedPtr<JobNode> earthCore = makeNode<SphereJob>(nameMgr.getName("earth core shape"));
+    earthCore->getSettings().set("radius", 3000._f); // km
+
+    SharedPtr<JobNode> earthIc = makeNode<DifferentiatedBodyIc>(nameMgr.getName("proto-Earth"));
+    VirtualSettings earthSettings = earthIc->getSettings();
+    earthSettings.set(BodySettingsId::PARTICLE_COUNT, int(earthParticles));
+    earthSettings.set(
+        BodySettingsId::INITIAL_DISTRIBUTION, EnumWrapper(DistributionEnum::PARAMETRIZED_SPIRALING));
+
+    earthSurface->connect(earthIc, "base shape");
+    mantleMaterial->connect(earthIc, "base material");
+    earthCore->connect(earthIc, "shape 1");
+    coreMaterial->connect(earthIc, "material 1");
+
+    SharedPtr<JobNode> earthEquilibrium = makeNode<EquilibriumDensityIc>(nameMgr.getName("earth equilibrium"));
+    earthIc->connect(earthEquilibrium, "particles");
+
+    // 2. Theia (Impactor: Mars-sized ~0.11 - 0.13 M_earth, R_surface = 3200 km, R_core = 1600 km)
+    SharedPtr<JobNode> theiaSurface = makeNode<SphereJob>(nameMgr.getName("theia mantle shape"));
+    theiaSurface->getSettings().set("radius", 3200._f); // km
+
+    SharedPtr<JobNode> theiaCore = makeNode<SphereJob>(nameMgr.getName("theia core shape"));
+    theiaCore->getSettings().set("radius", 1600._f); // km
+
+    SharedPtr<JobNode> theiaIc = makeNode<DifferentiatedBodyIc>(nameMgr.getName("Theia"));
+    VirtualSettings theiaSettings = theiaIc->getSettings();
+    theiaSettings.set(BodySettingsId::PARTICLE_COUNT, int(theiaParticles));
+    theiaSettings.set(
+        BodySettingsId::INITIAL_DISTRIBUTION, EnumWrapper(DistributionEnum::PARAMETRIZED_SPIRALING));
+
+    theiaSurface->connect(theiaIc, "base shape");
+    mantleMaterial->connect(theiaIc, "base material");
+    theiaCore->connect(theiaIc, "shape 1");
+    coreMaterial->connect(theiaIc, "material 1");
+
+    SharedPtr<JobNode> theiaEquilibrium = makeNode<EquilibriumDensityIc>(nameMgr.getName("theia equilibrium"));
+    theiaIc->connect(theiaEquilibrium, "particles");
+
+    // 3. Collision Geometry (Canup 2004 Canonical Impact)
+    // 45 degree impact angle, mutual velocity ~9.3 km/s.
+    // Using CollisionGeometrySetupJob which correctly computes the impact parameter offset:
+    // b = D * sin(45) where D is contact distance.
+    CollisionGeometrySettings geometry;
+    geometry.set(CollisionGeometrySettingsId::IMPACT_ANGLE, 45._f);
+    geometry.set(CollisionGeometrySettingsId::IMPACT_SPEED, 9.3e3_f); // m/s (CollisionGeometrySettings stores m/s)
+    geometry.set(CollisionGeometrySettingsId::IMPACTOR_OFFSET, 2._f); // start 2 smoothing lengths away
+    geometry.set(CollisionGeometrySettingsId::CENTER_OF_MASS_FRAME, true);
+    
+    SharedPtr<JobNode> setup = makeNode<CollisionGeometrySetupJob>(nameMgr.getName("impact setup"), geometry);
+    earthEquilibrium->connect(setup, "target");
+    theiaEquilibrium->connect(setup, "impactor");
+
+    // 4. SPH Hydrodynamics Simulation
+    const EnumWrapper criteria =
+        EnumWrapper::fromFlags(TimeStepCriterionEnum::COURANT | TimeStepCriterionEnum::DIVERGENCE);
+    const EnumWrapper forces = EnumWrapper::fromFlags(ForceEnum::PRESSURE | ForceEnum::SELF_GRAVITY);
+
+    SharedPtr<JobNode> sim = makeNode<SphJob>(nameMgr.getName("giant impact simulation"));
+    VirtualSettings simSettings = sim->getSettings();
+    simSettings.set(RunSettingsId::RUN_OUTPUT_INTERVAL, 300._f);       // output every 5 min
+    simSettings.set(RunSettingsId::TIMESTEPPING_MAX_TIMESTEP, 20._f);  // max 20 s timestep
+    simSettings.set(RunSettingsId::RUN_END_TIME, 86400._f);            // 24 hours of physical time
+    simSettings.set(RunSettingsId::SPH_SOLVER_FORCES, forces);
+    simSettings.set(RunSettingsId::TIMESTEPPING_CRITERION, criteria);
+
+    setup->connect(sim, "particles");
     return sim;
 }
 

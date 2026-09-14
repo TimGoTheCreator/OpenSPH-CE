@@ -297,6 +297,9 @@ public:
     /// \throw InvalidSetup if no entry with given key exists.
     IVirtualEntry::Value get(const String& key) const;
 
+    /// \brief Returns a pointer to the virtual entry, or nullptr if not found.
+    RawPtr<IVirtualEntry> getEntry(const String& key) const;
+
     /// \brief Creates a new category of entries.
     ///
     /// Returned object can be used to add entries into settings.

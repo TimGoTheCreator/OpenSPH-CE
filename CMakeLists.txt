@@ -157,6 +157,7 @@ add_subdirectory(gui)
 add_subdirectory(gui/launcherGui)
 add_subdirectory(cli/launcher)
 add_subdirectory(cli/info)
+add_subdirectory(cli/sph2extrapresets)
 
 if (BUILD_UTILS)
     add_subdirectory(cli/ssftotxt)
