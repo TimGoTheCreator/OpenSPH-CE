@@ -6,8 +6,11 @@ NAMESPACE_SPH_BEGIN
 
 /// \brief Saves particle data as an Alembic (.abc) point cache.
 class AlembicOutput : public IOutput {
+private:
+    Float scale = 1._f;
+
 public:
-    explicit AlembicOutput(const OutputFile& fileMask);
+    explicit AlembicOutput(const OutputFile& fileMask, const Float scale = 1._f);
     ~AlembicOutput();
 
     virtual Expected<Path> dump(const Storage& storage, const Statistics& stats) override;

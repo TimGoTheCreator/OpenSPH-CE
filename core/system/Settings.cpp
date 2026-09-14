@@ -499,6 +499,8 @@ const RunSettings& getDefaultSettings() {
         "%t which is replaced by current simulation time." },
     { RunSettingsId::RUN_OUTPUT_PATH,               "run.output.path",          "out"_s,
         "Directory where the output files are saved. Can be either absolute or relative path." },
+    { RunSettingsId::RUN_OUTPUT_SCALE,              "run.output.scale",         1._f,
+        "Multiplicative scale factor applied to coordinates and particle sizes when exporting (e.g., 1e-6 to convert m to Mm for Blender)." },
     { RunSettingsId::RUN_OUTPUT_QUANTITIES, "run.output.quantitites", DEFAULT_QUANTITY_IDS,
         "List of quantities to write to output file. Applicable for text and VTK outputs, binary output always stores "
         "all quantitites. Can be one or more values from:\n" + EnumMap::getDesc<OutputQuantityFlag>() },

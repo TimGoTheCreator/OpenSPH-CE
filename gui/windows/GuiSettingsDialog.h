@@ -17,6 +17,7 @@ class GuiSettingsDialog : public wxDialog {
 private:
     ComboBox* colorizerBox;
     Array<ExtColorizerId> colorizerIds;
+    ComboBox* rendererBox;
 
     FloatTextCtrl* periodCtrl;
     wxTextCtrl* overplotPath;

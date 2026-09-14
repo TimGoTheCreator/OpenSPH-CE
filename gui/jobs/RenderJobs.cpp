@@ -86,7 +86,9 @@ VirtualSettings AnimationJob::getSettings() {
         return type == RendererEnum::RAYMARCHER || type == RendererEnum::MESH;
     };
     auto volumeEnabler = [this] {
-        return gui.get<RendererEnum>(GuiSettingsId::RENDERER) == RendererEnum::VOLUME;
+        const RendererEnum type = gui.get<RendererEnum>(GuiSettingsId::RENDERER);
+        return type == RendererEnum::VOLUME ||
+               (type == RendererEnum::RAYMARCHER && gui.get<bool>(GuiSettingsId::RAYTRACE_GAS));
     };
     auto raytraceEnabler = [this] {
         const RendererEnum type = gui.get<RendererEnum>(GuiSettingsId::RENDERER);
@@ -143,6 +145,7 @@ VirtualSettings AnimationJob::getSettings() {
         .setEnabler(raymarcherEnabler);
     rendererCat.connect<bool>("Enable shadows", gui, GuiSettingsId::RAYTRACE_SHADOWS)
         .setEnabler(raymarcherEnabler);
+    rendererCat.connect<bool>("Render gas", gui, GuiSettingsId::RAYTRACE_GAS).setEnabler(raymarcherEnabler);
     rendererCat.connect<Float>("Medium emission [km^-1]", gui, GuiSettingsId::VOLUME_EMISSION)
         .setUnits(1.e-3_f)
         .setEnabler(volumeEnabler);

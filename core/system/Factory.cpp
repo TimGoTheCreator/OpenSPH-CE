@@ -642,8 +642,10 @@ AutoPtr<IOutput> Factory::getOutput(const RunSettings& settings) {
         return makeAuto<VdbOutput>(file);
 #endif
 #ifdef SPH_USE_ALEMBIC
-    case IoEnum::ALEMBIC_FILE:
-        return makeAuto<AlembicOutput>(file);
+    case IoEnum::ALEMBIC_FILE: {
+        const Float scale = settings.getOr<Float>(RunSettingsId::RUN_OUTPUT_SCALE, 1._f);
+        return makeAuto<AlembicOutput>(file, scale);
+    }
 #endif
     default:
         NOT_IMPLEMENTED;

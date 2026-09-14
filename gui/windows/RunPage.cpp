@@ -263,7 +263,7 @@ wxWindow* RunPage::createParticleBox(wxPanel* parent) {
 }
 
 wxWindow* RunPage::createRaymarcherBox(wxPanel* parent) {
-    wxStaticBox* raytraceBox = new wxStaticBox(parent, wxID_ANY, "", wxDefaultPosition, wxSize(-1, 125));
+    wxStaticBox* raytraceBox = new wxStaticBox(parent, wxID_ANY, "", wxDefaultPosition, wxSize(-1, 150));
     wxBoxSizer* boxSizer = new wxBoxSizer(wxVERTICAL);
     boxPad(boxSizer);
 
@@ -330,6 +330,20 @@ wxWindow* RunPage::createRaymarcherBox(wxPanel* parent) {
     emissionSizer->Add(emissionCtrl, 1, wxALIGN_CENTER_VERTICAL);
     emissionSizer->AddSpacer(boxPadding);
     boxSizer->Add(emissionSizer);
+
+    wxBoxSizer* gasSizer = new wxBoxSizer(wxHORIZONTAL);
+    gasSizer->AddSpacer(boxPadding);
+    const bool renderGas = gui.get<bool>(GuiSettingsId::RAYTRACE_GAS);
+    wxCheckBox* gasBox = new wxCheckBox(raytraceBox, wxID_ANY, "Render gas");
+    gasBox->SetValue(renderGas);
+    gasBox->Bind(wxEVT_CHECKBOX, [this, gasBox](wxCommandEvent& UNUSED(evt)) {
+        GuiSettings& gui = controller->getParams();
+        gui.set(GuiSettingsId::RAYTRACE_GAS, gasBox->GetValue());
+        controller->refresh();
+    });
+    gasSizer->Add(gasBox, 1, wxALIGN_CENTER_VERTICAL);
+    gasSizer->AddSpacer(boxPadding);
+    boxSizer->Add(gasSizer);
 
     raytraceBox->SetSizer(boxSizer);
     return raytraceBox;
@@ -518,8 +532,14 @@ wxPanel* RunPage::createVisBar() {
     visbarSizer->Add(quantitySizer);
     visbarSizer->AddSpacer(10);
 
+    wxRadioButton* noneButton =
+        new wxRadioButton(visbarPanel, wxID_ANY, "None (Fast)", wxDefaultPosition, buttonSize, wxRB_GROUP);
+    noneButton->SetToolTip("Disable rendering to speed up simulation.");
+    visbarSizer->Add(noneButton, 0, wxLEFT, 5);
+    visbarSizer->AddSpacer(10);
+
     wxRadioButton* particleButton =
-        new wxRadioButton(visbarPanel, wxID_ANY, "Particles", wxDefaultPosition, buttonSize, wxRB_GROUP);
+        new wxRadioButton(visbarPanel, wxID_ANY, "Particles", wxDefaultPosition, buttonSize);
     particleButton->SetToolTip("Render individual particles with optional smoothing.");
     visbarSizer->Add(particleButton, 0, wxLEFT, 5);
     wxWindow* particleBox = this->createParticleBox(visbarPanel);
@@ -527,14 +547,14 @@ wxPanel* RunPage::createVisBar() {
     visbarSizer->AddSpacer(10);
 
     wxRadioButton* surfaceButton =
-        new wxRadioButton(visbarPanel, wxID_ANY, "Surface raytracer", wxDefaultPosition, buttonSize, 0);
+        new wxRadioButton(visbarPanel, wxID_ANY, "Surface raytracer", wxDefaultPosition, buttonSize);
     visbarSizer->Add(surfaceButton, 0, wxLEFT, 5);
     wxWindow* raytracerBox = this->createRaymarcherBox(visbarPanel);
     visbarSizer->Add(raytracerBox, 0, wxALL, 5);
     visbarSizer->AddSpacer(10);
 
     wxRadioButton* volumeButton =
-        new wxRadioButton(visbarPanel, wxID_ANY, "Volumetric raytracer", wxDefaultPosition, buttonSize, 0);
+        new wxRadioButton(visbarPanel, wxID_ANY, "Volumetric raytracer", wxDefaultPosition, buttonSize);
     visbarSizer->Add(volumeButton, 0, wxLEFT, 5);
     wxWindow* volumeBox = this->createVolumeBox(visbarPanel);
     visbarSizer->Add(volumeBox, 0, wxALL, 5);
@@ -560,10 +580,41 @@ wxPanel* RunPage::createVisBar() {
         enableRecursive(raytracerBox, renderIdx == 1);
         enableRecursive(volumeBox, renderIdx == 2);
     };
-    enableControls(0);
+
+    auto selectRadio = [=](wxRadioButton* target) {
+        noneButton->SetValue(target == noneButton);
+        particleButton->SetValue(target == particleButton);
+        surfaceButton->SetValue(target == surfaceButton);
+        volumeButton->SetValue(target == volumeButton);
+    };
+
+    RendererEnum initialRenderer = gui.get<RendererEnum>(GuiSettingsId::RENDERER);
+    if (initialRenderer == RendererEnum::NONE) {
+        selectRadio(noneButton);
+        enableControls(-1);
+    } else if (initialRenderer == RendererEnum::RAYMARCHER) {
+        selectRadio(surfaceButton);
+        enableControls(1);
+    } else if (initialRenderer == RendererEnum::VOLUME) {
+        selectRadio(volumeButton);
+        enableControls(2);
+    } else {
+        selectRadio(particleButton);
+        enableControls(0);
+    }
+
+    noneButton->Bind(wxEVT_RADIOBUTTON, [=](wxCommandEvent& UNUSED(evt)) {
+        CHECK_FUNCTION(CheckFunction::MAIN_THREAD);
+        selectRadio(noneButton);
+        GuiSettings settings = gui;
+        settings.set(GuiSettingsId::RENDERER, RendererEnum::NONE);
+        controller->setRenderer(Factory::getRenderer(settings));
+        enableControls(-1);
+    });
 
     particleButton->Bind(wxEVT_RADIOBUTTON, [=](wxCommandEvent& UNUSED(evt)) {
         CHECK_FUNCTION(CheckFunction::MAIN_THREAD);
+        selectRadio(particleButton);
         controller->setRenderer(makeAuto<ParticleRenderer>(gui));
         enableControls(0);
     });
@@ -581,6 +632,7 @@ wxPanel* RunPage::createVisBar() {
     });*/
     surfaceButton->Bind(wxEVT_RADIOBUTTON, [=](wxCommandEvent& UNUSED(evt)) {
         CHECK_FUNCTION(CheckFunction::MAIN_THREAD);
+        selectRadio(surfaceButton);
         try {
             SharedPtr<IScheduler> scheduler = Factory::getScheduler(RunSettings::getDefaults());
             controller->setRenderer(makeAuto<RayMarcher>(scheduler, gui));
@@ -589,13 +641,14 @@ wxPanel* RunPage::createVisBar() {
             messageBox("Cannot initialize raytracer.\n\n" + exceptionMessage(e), "Error", wxOK);
 
             // switch to particle renderer (fallback option)
-            particleButton->SetValue(true);
+            selectRadio(particleButton);
             controller->setRenderer(makeAuto<ParticleRenderer>(gui));
             enableControls(0);
         }
     });
     volumeButton->Bind(wxEVT_RADIOBUTTON, [=](wxCommandEvent& UNUSED(evt)) {
         CHECK_FUNCTION(CheckFunction::MAIN_THREAD);
+        selectRadio(volumeButton);
         SharedPtr<IScheduler> scheduler = Factory::getScheduler(RunSettings::getDefaults());
         GuiSettings volumeGui = gui;
         volumeGui.set(GuiSettingsId::COLORMAP_TYPE, ColorMapEnum::LOGARITHMIC);

@@ -205,6 +205,8 @@ enum class GuiSettingsId {
 
     RAYTRACE_SPHERES,
 
+    RAYTRACE_GAS,
+
     RAYTRACE_LENSING_MAGNITUDE,
 
     VOLUME_EMISSION,

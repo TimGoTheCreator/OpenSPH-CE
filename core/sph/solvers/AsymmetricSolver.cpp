@@ -177,10 +177,50 @@ void AsymmetricSolver::loop(Storage& storage, Statistics& UNUSED(stats)) {
 
     ArrayView<Size> neighs = storage.getValue<Size>(QuantityId::NEIGHBOR_CNT);
 
-    // we need to symmetrize kernel in smoothing lenghts to conserve momentum
-    SymmetrizeSmoothingLengths<const LutKernel<DIMENSIONS>&> symmetrizedKernel(kernel);
+    // Compute spatial Morton traversal order for cache locality without modifying Storage buffers
+    Box box;
+    for (Size i = 0; i < r.size(); ++i) {
+        box.extend(r[i]);
+    }
+    const Vector minP = box.lower();
+    const Vector rangeP = box.upper() - minP;
+    const Vector invRange(rangeP[X] > 1e-12_f ? 1023.0_f / rangeP[X] : 0.0_f,
+        rangeP[Y] > 1e-12_f ? 1023.0_f / rangeP[Y] : 0.0_f,
+        rangeP[Z] > 1e-12_f ? 1023.0_f / rangeP[Z] : 0.0_f);
 
-    auto functor = [this, r, &neighs, maxRadius, &symmetrizedKernel, &actFinder](Size i, ThreadData& data) {
+    auto expandBits = [](uint32_t v) -> uint32_t {
+        // what the fuck?
+        v = (v * 0x00010001u) & 0xFF0000FFu;
+        v = (v * 0x00000101u) & 0x0F00F00Fu;
+        v = (v * 0x00000011u) & 0xC30C30C3u;
+        v = (v * 0x00000005u) & 0x49249249u;
+        return v;
+    };
+    auto morton3D = [&expandBits](uint32_t x, uint32_t y, uint32_t z) -> uint32_t {
+        return (expandBits(x) << 2) | (expandBits(y) << 1) | expandBits(z);
+    };
+
+    Array<Size> traversalOrder(r.size());
+    Array<uint32_t> mortonKeys(r.size());
+    for (Size i = 0; i < r.size(); ++i) {
+        traversalOrder[i] = i;
+        const Vector normP = r[i] - minP;
+        const uint32_t x = clamp(int(normP[X] * invRange[X]), 0, 1023);
+        const uint32_t y = clamp(int(normP[Y] * invRange[Y]), 0, 1023);
+        const uint32_t z = clamp(int(normP[Z] * invRange[Z]), 0, 1023);
+        mortonKeys[i] = morton3D(x, y, z);
+    }
+
+    std::sort(traversalOrder.begin(), traversalOrder.end(), [&mortonKeys](Size a, Size b) {
+        return mortonKeys[a] < mortonKeys[b];
+    });
+
+    const Float kernelRadius = kernel.radius();
+    const Float halfKernelRadius = 0.5_f * kernelRadius;
+
+    auto functor = [this, r, &neighs, maxRadius, kernelRadius, halfKernelRadius, &actFinder, &traversalOrder](
+                       Size k, ThreadData& data) {
+        const Size i = traversalOrder[k];
         Float neighborRadius = radiiMap ? radiiMap->getRadius(r[i]) : maxRadius;
         if (neighborRadius <= 0._f) {
             neighborRadius = maxRadius;
@@ -188,29 +228,36 @@ void AsymmetricSolver::loop(Storage& storage, Statistics& UNUSED(stats)) {
         SPH_ASSERT(neighborRadius > 0._f);
 
         // max possible value of kernel.radius() * hbar
-        const Float radius = 0.5_f * (r[i][H] * kernel.radius() + neighborRadius);
+        const Float radius = 0.5_f * (r[i][H] * kernelRadius + neighborRadius);
 
         actFinder.findAll(i, radius, data.neighs);
         data.grads.clear();
         data.idxs.clear();
         const Size neighCount = data.neighs.size();
-        data.grads.reserve(neighCount);
-        data.idxs.reserve(neighCount);
+        if (data.grads.capacity() < neighCount) {
+            data.grads.reserve(neighCount);
+            data.idxs.reserve(neighCount);
+        }
 
-        const Float hi = r[i][H];
-        const Float kernelRadius = kernel.radius();
+        const Vector ri = r[i];
+        const Float hi = ri[H];
+        const Float hiHalfKR = hi * halfKernelRadius;
 
         for (const auto& n : data.neighs) {
             const Size j = n.index;
             if (i == j) {
                 continue;
             }
-            const Float hbar = 0.5_f * (hi + r[j][H]);
-            if (n.distanceSqr >= sqr(kernelRadius * hbar)) {
+            const Float hj = r[j][H];
+            const Float cutoff = hiHalfKR + hj * halfKernelRadius;
+            if (n.distanceSqr >= sqr(cutoff)) {
                 continue;
             }
-            const Vector gr = symmetrizedKernel.grad(r[i], r[j]);
-            SPH_ASSERT(isReal(gr) && dot(gr, r[i] - r[j]) <= 0._f, gr, r[i] - r[j]);
+            const Float hbar = 0.5_f * (hi + hj);
+            const Float hInv = 1._f / hbar;
+            const Vector dr = ri - r[j];
+            const Vector gr = kernel.gradPrecomputed(dr, n.distanceSqr, hInv);
+            SPH_ASSERT(isReal(gr) && dot(gr, dr) <= 0._f, gr, dr);
             data.grads.emplaceBack(gr);
             data.idxs.emplaceBack(j);
         }

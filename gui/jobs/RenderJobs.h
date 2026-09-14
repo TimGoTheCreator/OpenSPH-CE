@@ -150,7 +150,8 @@ public:
     }
 
     virtual UnorderedMap<String, ExtJobType>
-    requires() const override {
+        requires()
+    const override {
         if (sequence.enabled) {
             return {};
         } else {

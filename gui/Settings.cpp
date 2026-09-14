@@ -5,6 +5,7 @@
 NAMESPACE_SPH_BEGIN
 
 static RegisterEnum<RendererEnum> sRenderer({
+    { RendererEnum::NONE, "none", "No rendering. The fastest option for pure simulation without visual overhead." },
     { RendererEnum::PARTICLE, "particle", "Particles are visualized as circles. No shading." },
     /*{ RendererEnum::MESH,
         "mesh",
@@ -147,6 +148,8 @@ const Settings<GuiSettingsId>& getDefaultSettings() {
     { GuiSettingsId::RAYTRACE_SPHERES,      "raytrace.spheres",     false,
         "If true, raytraced surface is given by spheres centered at particles, "
         "otherwise isosurface of a colorfield is rendered." },
+    { GuiSettingsId::RAYTRACE_GAS,          "raytrace.gas",         true,
+        "If true, vapor and gas particles are rendered volumetrically on top of the surface." },
     { GuiSettingsId::RAYTRACE_LENSING_MAGNITUDE, "raytrace.lensing_magnitude", 0._f,
         "Magnitude of the lensing effect." },
     { GuiSettingsId::VOLUME_EMISSION,       "volume.emission",      1.e-3_f,

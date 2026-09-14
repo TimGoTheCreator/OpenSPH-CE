@@ -997,6 +997,9 @@ enum class RunSettingsId {
     /// Path where all output files (dumps, logs, ...) will be written
     RUN_OUTPUT_PATH,
 
+    /// Multiplicative scale factor applied to coordinates and dimensions in output formats (e.g. Alembic for Blender).
+    RUN_OUTPUT_SCALE,
+
     /// List of quantities to write to text output. Binary output always stores all quantitites.
     RUN_OUTPUT_QUANTITIES,
 

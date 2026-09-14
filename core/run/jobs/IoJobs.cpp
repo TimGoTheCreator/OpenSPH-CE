@@ -219,6 +219,16 @@ VirtualSettings SaveFileJob::getSettings() {
             const IoEnum type = settings.get<IoEnum>(RunSettingsId::RUN_OUTPUT_TYPE);
             return type == IoEnum::TEXT_FILE || type == IoEnum::VTK_FILE;
         });
+    outputCat.connect<Float>("Output scale", settings, RunSettingsId::RUN_OUTPUT_SCALE)
+        .setUnits(1._f)
+        .setEnabler([this] {
+            const IoEnum type = settings.get<IoEnum>(RunSettingsId::RUN_OUTPUT_TYPE);
+#ifdef SPH_USE_ALEMBIC
+            return type == IoEnum::ALEMBIC_FILE;
+#else
+            return false;
+#endif
+        });
 
     return connector;
 }

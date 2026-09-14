@@ -4,9 +4,10 @@
 #include "gui/objects/Color.h"
 #include "gui/renderers/Brdf.h"
 #include "gui/renderers/IRenderer.h"
+#include "gui/renderers/Lensing.h"
 #include "objects/finders/Bvh.h"
 #include "sph/kernel/Kernel.h"
-#include "gui/renderers/Lensing.h"
+
 
 NAMESPACE_SPH_BEGIN
 
@@ -96,7 +97,22 @@ private:
         /// If true, the colors are used for emission, otherwise for diffuse reflectance.
         bool doEmission;
 
+        /// Whether each particle is classified as gas/vapor
+        Array<bool> isGas;
+
+        /// Mass-based radii for gas emission
+        Array<float> referenceRadii;
+
+        /// Distention factor of each particle
+        Array<float> distention;
+
     } cached;
+
+    Rgba accumulateGas(const RenderParams& params,
+        const Ray& ray,
+        ArrayView<const IntersectionInfo> intersections,
+        const Float maxDist,
+        Rgba baseColor) const;
 
 public:
     RayMarcher(SharedPtr<IScheduler> scheduler, const GuiSettings& settings);
@@ -175,5 +191,15 @@ private:
 
     Vector evalUvws(ArrayView<const Size> neighs, const Vector& pos1) const;
 };
+
+NAMESPACE_SPH_END
+
+Vector evalGradient(ArrayView<const Size> neighs, const Vector& pos) const;
+
+Rgba evalColor(ArrayView<const Size> neighs, const Vector& pos1) const;
+
+Vector evalUvws(ArrayView<const Size> neighs, const Vector& pos1) const;
+}
+;
 
 NAMESPACE_SPH_END

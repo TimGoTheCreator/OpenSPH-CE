@@ -124,6 +124,9 @@ struct RenderParams {
         /// \brief Width of the image reconstruction filter
         float filterWidth = 2.f;
 
+        /// \brief If true, render vapor and gas particles volumetrically on top of the surface
+        bool renderGas = true;
+
     } surface;
 
     /// \brief Parameters of volumetric renderer

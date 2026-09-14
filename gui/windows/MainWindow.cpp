@@ -1,5 +1,5 @@
-#include "common/VersionHelper.h"
 #include "gui/windows/MainWindow.h"
+#include "common/VersionHelper.h"
 #include "gui/Controller.h"
 #include "gui/Settings.h"
 #include "gui/Utils.h"
@@ -18,6 +18,7 @@
 #include "run/jobs/GeometryJobs.h"
 #include "run/jobs/IoJobs.h"
 #include "run/jobs/ParticleJobs.h"
+
 
 #include <wx/aboutdlg.h>
 #include <wx/aui/auibook.h>

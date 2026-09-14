@@ -15,8 +15,9 @@ using namespace Alembic::AbcGeom;
 
 NAMESPACE_SPH_BEGIN
 
-AlembicOutput::AlembicOutput(const OutputFile& fileMask)
-    : IOutput(fileMask) {}
+AlembicOutput::AlembicOutput(const OutputFile& fileMask, const Float scale)
+    : IOutput(fileMask)
+    , scale(scale) {}
 
 AlembicOutput::~AlembicOutput() = default;
 
@@ -41,9 +42,9 @@ Expected<Path> AlembicOutput::dump(const Storage& storage, const Statistics& sta
         std::vector<float> widths(numParticles);
 
         for (Size i = 0; i < numParticles; ++i) {
-            positions[i] = Imath::V3f(float(r[i][X]), float(r[i][Y]), float(r[i][Z]));
+            positions[i] = Imath::V3f(float(r[i][X] * scale), float(r[i][Y] * scale), float(r[i][Z] * scale));
             ids[i] = i;
-            widths[i] = 2.0f * float(r[i][H]); // Diameter based on smoothing length
+            widths[i] = 2.0f * float(r[i][H] * scale); // Diameter based on smoothing length
         }
 
         OPointsSchema::Sample sample;
@@ -57,12 +58,25 @@ Expected<Path> AlembicOutput::dump(const Storage& storage, const Statistics& sta
             ArrayView<const Vector> v = storage.getDt<Vector>(QuantityId::POSITION);
             std::vector<Imath::V3f> velocities(numParticles);
             for (Size i = 0; i < numParticles; ++i) {
-                velocities[i] = Imath::V3f(float(v[i][X]), float(v[i][Y]), float(v[i][Z]));
+                velocities[i] = Imath::V3f(float(v[i][X] * scale), float(v[i][Y] * scale), float(v[i][Z] * scale));
             }
             sample.setVelocities(V3fArraySample(velocities));
         }
 
         pointsSchema.set(sample);
+
+        // Export UV coordinates if available (standard for Houdini / Blender / Maya)
+        if (storage.has(QuantityId::UVW)) {
+            ArrayView<const Vector> uvws = storage.getValue<Vector>(QuantityId::UVW);
+            std::vector<Imath::V2f> uvs(numParticles);
+            for (Size i = 0; i < numParticles; ++i) {
+                uvs[i] = Imath::V2f(float(uvws[i][X]), float(uvws[i][Y]));
+            }
+            OV2fGeomParam uvParam(pointsSchema, "uv", false, GeometryScope::kVertexScope, 1);
+            OV2fGeomParam::Sample uvSample(V2fArraySample(uvs), GeometryScope::kVertexScope);
+            uvParam.set(uvSample);
+        }
+
         return abcPath;
     } catch (const std::exception& e) {
         return makeUnexpected<Path>("Failed to save Alembic file.\n{}", e.what());
@@ -149,6 +163,24 @@ Outcome AlembicInput::load(const Path& path, Storage& storage, Statistics& UNUSE
         rho.fill(1000._f);
         storage.insert<Float>(QuantityId::MASS, OrderEnum::ZERO, std::move(m));
         storage.insert<Float>(QuantityId::DENSITY, OrderEnum::ZERO, std::move(rho));
+
+        // Read UV coordinates if available
+        try {
+            IV2fGeomParam uvParam(pointsSchema, "uv");
+            if (uvParam.valid()) {
+                V2fArraySamplePtr uvPtr = uvParam.getExpandedValue().getVals();
+                if (uvPtr && uvPtr->size() == numParticles) {
+                    Array<Vector> uvws(numParticles);
+                    for (Size i = 0; i < numParticles; ++i) {
+                        const Imath::V2f& uv = (*uvPtr)[i];
+                        uvws[i] = Vector(uv.x, uv.y, 0.0_f);
+                    }
+                    storage.insert<Vector>(QuantityId::UVW, OrderEnum::ZERO, std::move(uvws));
+                }
+            }
+        } catch (...) {
+            // "uv" GeomParam not present in this Alembic file, continue safely
+        }
 
         return SUCCESS;
     } catch (const std::exception& e) {

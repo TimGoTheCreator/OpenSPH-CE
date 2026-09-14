@@ -97,6 +97,59 @@ void RayMarcher::initialize(const Storage& storage,
         }
     }
 
+    cached.isGas.resize(particleCnt);
+    cached.isGas.fill(false);
+    cached.referenceRadii.resize(particleCnt);
+    cached.distention.resize(particleCnt);
+    cached.distention.fill(1.f);
+
+    if (storage.has(QuantityId::MASS)) {
+        ArrayView<const Float> m = storage.getValue<Float>(QuantityId::MASS);
+        ArrayView<const Float> rho = storage.has(QuantityId::DENSITY)
+                                         ? storage.getValue<Float>(QuantityId::DENSITY)
+                                         : ArrayView<const Float>();
+        ArrayView<const Float> u = storage.has(QuantityId::ENERGY)
+                                       ? storage.getValue<Float>(QuantityId::ENERGY)
+                                       : ArrayView<const Float>();
+
+        if (storage.getMaterialCnt() > 0) {
+            for (Size matId = 0; matId < storage.getMaterialCnt(); ++matId) {
+                MaterialView body = storage.getMaterial(matId);
+                const Float rho0 = body->getParams().has(BodySettingsId::DENSITY)
+                                       ? body->getParam<Float>(BodySettingsId::DENSITY)
+                                       : 1000._f;
+                const EosEnum eos = body->getParams().getOr<EosEnum>(BodySettingsId::EOS, EosEnum::NONE);
+                const bool isGasEos = (eos == EosEnum::IDEAL_GAS);
+                const Float u_iv = body->getParams().getOr<Float>(BodySettingsId::TILLOTSON_ENERGY_IV, INFTY);
+
+                for (Size i : body.sequence()) {
+                    const Float volume0 = m[i] / rho0;
+                    cached.referenceRadii[i] = root<3>(3._f * volume0 / (4._f * PI));
+                    cached.distention[i] = max(1.f, float(cached.r[i][H] / cached.referenceRadii[i]));
+                    if (isGasEos || cached.distention[i] > 2.0f) {
+                        cached.isGas[i] = true;
+                    }
+                    if (!rho.empty() && rho[i] < 0.25_f * rho0) {
+                        cached.isGas[i] = true;
+                    }
+                    if (!u.empty() && u[i] >= u_iv) {
+                        cached.isGas[i] = true;
+                    }
+                }
+            }
+        } else {
+            const Float rho0 = 1000._f;
+            for (Size i = 0; i < m.size(); ++i) {
+                const Float volume0 = m[i] / rho0;
+                cached.referenceRadii[i] = root<3>(3._f * volume0 / (4._f * PI));
+                cached.distention[i] = max(1.f, float(cached.r[i][H] / cached.referenceRadii[i]));
+                if (cached.distention[i] > 2.0f) {
+                    cached.isGas[i] = true;
+                }
+            }
+        }
+    }
+
     this->setColorizer(colorizer);
 
     cached.attractors.clear();
@@ -128,20 +181,40 @@ void RayMarcher::initialize(const Storage& storage,
         }
     }
 
-    Array<BvhSphere> spheres;
-    spheres.reserve(particleCnt + cached.attractors.size());
-    for (Size i = 0; i < particleCnt; ++i) {
-        BvhSphere& s = spheres.emplaceBack(cached.r[i], /*2.f * */ cached.r[i][H]);
-        s.userData = i;
-    }
-    for (Size i = 0; i < cached.attractors.size(); ++i) {
-        BvhSphere& s = spheres.emplaceBack(cached.attractors[i].position, cached.attractors[i].radius);
-        s.userData = particleCnt + i;
-    }
-    bvh.build(std::move(spheres));
-
     finder = Factory::getFinder(RunSettings::getDefaults());
     finder->build(*scheduler, cached.r);
+
+    const float MAX_DISTENTION = 50.f;
+    const Size MIN_NEIGHS = 8;
+
+    ThreadLocal<Array<NeighborRecord>> neighs(*scheduler);
+    Array<BvhSphere> spheres(particleCnt + cached.attractors.size());
+
+    parallelFor(*scheduler, neighs, 0, particleCnt, [&](const Size i, Array<NeighborRecord>& local) {
+        const float initialRadius = cached.r[i][H];
+        float radius = initialRadius;
+        if (cached.isGas[i]) {
+            while (radius < MAX_DISTENTION * initialRadius) {
+                finder->findAll(i, radius, local);
+                if (local.size() >= MIN_NEIGHS) {
+                    break;
+                } else {
+                    radius *= 1.5f;
+                }
+            }
+        }
+        BvhSphere s(cached.r[i], radius);
+        s.userData = i;
+        spheres[i] = s;
+        cached.distention[i] = min(radius / initialRadius, MAX_DISTENTION);
+    });
+
+    for (Size i = 0; i < cached.attractors.size(); ++i) {
+        BvhSphere s(cached.attractors[i].position, cached.attractors[i].radius);
+        s.userData = particleCnt + i;
+        spheres[particleCnt + i] = s;
+    }
+    bvh.build(std::move(spheres));
 
     for (ThreadData& data : threadData) {
         MarchData march;
@@ -172,16 +245,113 @@ Rgba RayMarcher::shade(const RenderParams& params, const CameraRay& cameraRay, T
     const Ray ray(cameraRay.origin, dir);
 
     MarchData& march(data.data);
-    if (Optional<Vector> hit = this->intersect(march, ray, params.surface.level, false)) {
+    Optional<Vector> hit = this->intersect(march, ray, params.surface.level, false);
+    Array<IntersectionInfo> cameraIntersections;
+    if (params.surface.renderGas && !cached.isGas.empty()) {
+        cameraIntersections = march.intersections.clone();
+    }
+
+    Rgba result;
+    Float hitDist = INFTY;
+    if (hit) {
+        hitDist = getLength(hit.value() - ray.origin());
         if (isAttractorHit(march.previousIdx)) {
             const Size attractorIndex = march.previousIdx - cached.r.size();
-            return this->getAttractorColor(march, params, attractorIndex, hit.value(), ray.direction());
+            result = this->getAttractorColor(march, params, attractorIndex, hit.value(), ray.direction());
         } else {
-            return this->getSurfaceColor(march, params, march.previousIdx, hit.value(), ray.direction());
+            result = this->getSurfaceColor(march, params, march.previousIdx, hit.value(), ray.direction());
         }
     } else {
-        return this->getEnviroColor(cameraRay);
+        result = this->getEnviroColor(cameraRay);
     }
+
+    if (params.surface.renderGas && !cached.isGas.empty()) {
+        result = this->accumulateGas(params, ray, cameraIntersections, hitDist, result);
+    }
+
+    return result;
+}
+
+Rgba RayMarcher::accumulateGas(const RenderParams& params,
+    const Ray& ray,
+    ArrayView<const IntersectionInfo> intersections,
+    const Float maxDist,
+    Rgba baseColor) const {
+    const float g = 0.5f; // Henyey-Greenstein asymmetry parameter
+    const float cosTheta = dot(ray.direction(), -params.lighting.dirToSun);
+    const float phase = (1.f - g * g) / pow(1.f + g * g - 2.f * g * cosTheta, 1.5f);
+
+    Rgba result = baseColor;
+    for (const IntersectionInfo& is : reverse(intersections)) {
+        if (is.t >= maxDist) {
+            continue;
+        }
+        const Size i = is.object->userData;
+        if (i >= cached.r.size() || !cached.isGas[i]) {
+            continue;
+        }
+
+        const BvhSphere* s = static_cast<const BvhSphere*>(is.object);
+        const Vector hit = ray.origin() + ray.direction() * is.t;
+        const Vector center = s->getCenter();
+        const Vector toCenter = getNormalized(center - hit);
+
+        const float cosPhi = abs(dot(toCenter, ray.direction()));
+        const float distention = cached.distention[i];
+        const float radiiFactor = cached.referenceRadii[i] / cached.r[i][H];
+
+        // cosPhi is 1 at center-aiming rays, 0 at grazing ray (edge of bounding sphere)
+        // Ensure falloff vanishes smoothly to 0 at the boundary (cosPhi == 0) to avoid hard clipped sphere
+        // edges
+        const float sinPhi2 = max(0.f, 1.f - cosPhi * cosPhi); // (impact_param / R)^2
+        const float falloff = cosPhi * exp(-3.f * sinPhi2);
+        const float secant = 2._f * getLength(center - hit) * cosPhi * radiiFactor;
+
+        if (params.volume.absorption > 0.f) {
+            result = result * exp(-params.volume.absorption * secant * falloff / distention);
+        }
+
+        const float emission = params.volume.emission;
+        if (emission > 0.f) {
+            float shadowFactor = 1.0f;
+            if (fixed.shadows) {
+                MarchData shadowData;
+                shadowData.previousIdx = i;
+                Ray shadowRay(hit - 1.e-4f * params.lighting.dirToSun, -params.lighting.dirToSun);
+
+                // Check if shadowed by solid planet
+                if (this->intersect(shadowData, shadowRay, params.surface.level, true)) {
+                    shadowFactor = 0.05f; // Deep shadow
+                } else {
+                    // Accumulate gas optical depth towards sun
+                    float gasOpticalDepth = 0.f;
+                    for (const IntersectionInfo& shadowIs : shadowData.intersections) {
+                        const Size si = shadowIs.object->userData;
+                        if (si < cached.r.size() && cached.isGas[si]) {
+                            const BvhSphere* ss = static_cast<const BvhSphere*>(shadowIs.object);
+                            const Vector scenter = ss->getCenter();
+                            const Vector shit = shadowRay.origin() + shadowRay.direction() * shadowIs.t;
+                            const float scosPhi =
+                                abs(dot(getNormalized(scenter - shit), shadowRay.direction()));
+                            const float sdistention = cached.distention[si];
+                            const float sradiiFactor = cached.referenceRadii[si] / cached.r[si][H];
+                            const float ssinPhi2 = max(0.f, 1.f - scosPhi * scosPhi);
+                            const float sfalloff = scosPhi * exp(-3.f * ssinPhi2);
+                            const float ssecant = 2._f * getLength(scenter - shit) * scosPhi * sradiiFactor;
+                            gasOpticalDepth += params.volume.absorption * ssecant * sfalloff / sdistention;
+                        }
+                    }
+                    shadowFactor = exp(-gasOpticalDepth);
+                }
+            }
+
+            const float magnitude = emission * (falloff / distention) * secant * shadowFactor * phase;
+            result += cached.colors[i] * magnitude;
+            result.a() += magnitude;
+        }
+    }
+    result.a() = min(result.a(), 1.f);
+    return result;
 }
 
 ArrayView<const Size> RayMarcher::getNeighborList(MarchData& data, const Size index) const {
@@ -309,7 +479,7 @@ Rgba RayMarcher::getAttractorColor(MarchData& data,
         return diffuse * params.lighting.ambientLight;
     }
 
-     // check for occlusion
+    // check for occlusion
     if (fixed.shadows) {
         Ray rayToSun(hit - 1.e-6_f * n * a.radius, -params.lighting.dirToSun);
         if (this->intersect(data, rayToSun, params.surface.level, true)) {
@@ -454,5 +624,7 @@ Vector RayMarcher::evalUvws(ArrayView<const Size> neighs, const Vector& pos1) co
         return uvws / weightSum;
     }
 }
+
+NAMESPACE_SPH_END
 
 NAMESPACE_SPH_END

@@ -35,6 +35,12 @@ public:
         return r * pow<D + 2>(hInv) * impl().gradImpl(getSqrLength(r) * sqr(hInv));
     }
 
+    /// \brief Gradient of kernel using precomputed squared distance and inverse smoothing length
+    INLINE Vector gradPrecomputed(const Vector& dr, const Float distSqr, const Float hInv) const noexcept {
+        SPH_ASSERT(hInv > 0._f);
+        return dr * pow<D + 2>(hInv) * impl().gradImpl(distSqr * sqr(hInv));
+    }
+
 private:
     INLINE const TDerived& impl() const noexcept {
         return static_cast<const TDerived&>(*this);

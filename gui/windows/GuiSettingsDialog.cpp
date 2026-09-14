@@ -59,6 +59,36 @@ GuiSettingsDialog::GuiSettingsDialog(wxWindow* parent)
     colorizerSizer->Add(colorizerBox, 1, wxEXPAND);
     renderBox->Add(colorizerSizer);
 
+    wxBoxSizer* rendererSizer = new wxBoxSizer(wxHORIZONTAL);
+    wxStaticText* rendererText = new wxStaticText(renderBox->GetStaticBox(), wxID_ANY, "Default renderer");
+    rendererSizer->Add(rendererText, 0, wxALIGN_CENTER_VERTICAL);
+    rendererSizer->AddStretchSpacer(1);
+    rendererBox = new ComboBox(renderBox->GetStaticBox(), "");
+    rendererBox->Append("None (Fast)");
+    rendererBox->Append("Particles");
+    rendererBox->Append("Surface raytracer");
+    rendererBox->Append("Volumetric raytracer");
+    RendererEnum currentRenderer = gui.get<RendererEnum>(GuiSettingsId::RENDERER);
+    switch (currentRenderer) {
+    case RendererEnum::NONE:
+        rendererBox->SetSelection(0);
+        break;
+    case RendererEnum::PARTICLE:
+        rendererBox->SetSelection(1);
+        break;
+    case RendererEnum::RAYMARCHER:
+        rendererBox->SetSelection(2);
+        break;
+    case RendererEnum::VOLUME:
+        rendererBox->SetSelection(3);
+        break;
+    default:
+        rendererBox->SetSelection(1);
+        break;
+    }
+    rendererSizer->Add(rendererBox, 1, wxEXPAND);
+    renderBox->Add(rendererSizer);
+
     wxBoxSizer* subsamplingSizer = new wxBoxSizer(wxHORIZONTAL);
     wxStaticText* subsamplingText = new wxStaticText(renderBox->GetStaticBox(), wxID_ANY, "Subsampling iterations");
     subsamplingSizer->Add(subsamplingText, 0, wxALIGN_CENTER_VERTICAL);
@@ -161,6 +191,23 @@ void GuiSettingsDialog::commit() {
     gui.set(GuiSettingsId::PLOT_INITIAL_PERIOD, Float(periodCtrl->getValue()));
     gui.set(GuiSettingsId::PLOT_OVERPLOT_SFD, String(overplotPath->GetValue().wc_str()));
     gui.set(GuiSettingsId::RAYTRACE_SUBSAMPLING, subsamplingSpinner->GetValue());
+
+    switch (rendererBox->GetSelection()) {
+    case 0:
+        gui.set(GuiSettingsId::RENDERER, RendererEnum::NONE);
+        break;
+    case 1:
+        gui.set(GuiSettingsId::RENDERER, RendererEnum::PARTICLE);
+        break;
+    case 2:
+        gui.set(GuiSettingsId::RENDERER, RendererEnum::RAYMARCHER);
+        break;
+    case 3:
+        gui.set(GuiSettingsId::RENDERER, RendererEnum::VOLUME);
+        break;
+    default:
+        break;
+    }
 
     this->EndModal(wxID_OK);
 }

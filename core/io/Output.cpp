@@ -1168,6 +1168,15 @@ Expected<Path> VtkOutput::dump(const Storage& storage, const Statistics& stats) 
             writeDataArray(of, storage, stats, *column);
         }
 
+        if (storage.has(QuantityId::UVW)) {
+            ArrayView<const Vector> uvws = storage.getValue<Vector>(QuantityId::UVW);
+            of << R"(      <DataArray type="Float32" Name="UVW" NumberOfComponents="3" format="ascii">)" << "\n";
+            for (Size i = 0; i < uvws.size(); ++i) {
+                of << float(uvws[i][X]) << " " << float(uvws[i][Y]) << " " << float(uvws[i][Z]) << "\n";
+            }
+            of << R"(      </DataArray>)" << "\n";
+        }
+
         of << R"(      </PointData>
       <Cells>
         <DataArray type="Int32" Name="connectivity" format="ascii">
@@ -1203,6 +1212,7 @@ Outcome VtkInput::load(const Path& path, Storage& storage, Statistics& stats) {
     Array<Float> masses;
     Array<Float> energies;
     Array<Float> densities;
+    Array<Vector> uvws;
 
     std::string line;
     bool inPoints = false;
@@ -1284,6 +1294,11 @@ Outcome VtkInput::load(const Path& path, Storage& storage, Statistics& stats) {
             while (ss >> rho) {
                 densities.push(rho);
             }
+        } else if (currentArrayName == "UVW" || currentArrayName == "uvw" || currentArrayName == "UV" || currentArrayName == "uv") {
+            Float u, v, w;
+            while (ss >> u >> v >> w) {
+                uvws.push(Vector(u, v, w));
+            }
         }
     }
 
@@ -1329,6 +1344,10 @@ Outcome VtkInput::load(const Path& path, Storage& storage, Statistics& stats) {
     Array<Float> sml(particleCnt);
     sml.fill(1.0_f);
     storage.insert<Float>(QuantityId::SMOOTHING_LENGTH, OrderEnum::ZERO, std::move(sml));
+
+    if (uvws.size() == particleCnt) {
+        storage.insert<Vector>(QuantityId::UVW, OrderEnum::ZERO, std::move(uvws));
+    }
 
     stats.set(StatisticsId::RUN_TIME, 0.0_f);
     return SUCCESS;
@@ -1418,6 +1437,7 @@ Outcome Hdf5Input::load(const Path& path, Storage& storage, Statistics& stats) {
     std::string rhoName = "/rho";
     std::string uName = "/e";
     std::string smlName = "/sml";
+    std::string uvwName = "/uvw";
 
     bool isGadget = false;
     htri_t existsPart0 = H5Lexists(fileId, "/PartType0", H5P_DEFAULT);
@@ -1431,6 +1451,7 @@ Outcome Hdf5Input::load(const Path& path, Storage& storage, Statistics& stats) {
         rhoName = "/PartType0/Density";
         uName = "/PartType0/InternalEnergy";
         smlName = "/PartType0/SmoothingLength";
+        uvwName = "/PartType0/UVW";
     } else if (existsPart1 > 0) {
         isGadget = true;
         posName = "/PartType1/Coordinates";
@@ -1440,6 +1461,7 @@ Outcome Hdf5Input::load(const Path& path, Storage& storage, Statistics& stats) {
         rhoName = "/PartType1/Density";
         uName = "/PartType1/InternalEnergy";
         smlName = "/PartType1/SmoothingLength";
+        uvwName = "/PartType1/UVW";
     }
 
     const hid_t posId = H5Dopen(fileId, posName.c_str(), H5P_DEFAULT);
@@ -1492,6 +1514,8 @@ Outcome Hdf5Input::load(const Path& path, Storage& storage, Statistics& stats) {
             sml.fill(1.0_f);
             storage.insert<Float>(QuantityId::SMOOTHING_LENGTH, OrderEnum::ZERO, std::move(sml));
         }
+        // Load UVW mapping coordinates if present in the file
+        tryLoadQuantity<Vector>(fileId, uvwName, QuantityId::UVW, OrderEnum::ZERO, storage);
     } catch (const IoError& e) {
         H5Fclose(fileId);
         return makeFailed("Cannot read file '{}'.\n{}", path.string(), exceptionMessage(e));
@@ -1601,6 +1625,7 @@ Expected<Path> Hdf5Output::dump(const Storage& storage, const Statistics& stats)
     saveQuantity<Float>(fileId, "/p", QuantityId::PRESSURE, OrderEnum::ZERO, storage);
     saveQuantity<Float>(fileId, "/rho", QuantityId::DENSITY, OrderEnum::ZERO, storage);
     saveQuantity<Float>(fileId, "/e", QuantityId::ENERGY, OrderEnum::ZERO, storage);
+    saveQuantity<Vector>(fileId, "/uvw", QuantityId::UVW, OrderEnum::ZERO, storage);
 
     // Save smoothing lengths from position[H]
     const Size particleCnt = storage.getParticleCnt();
@@ -1682,6 +1707,7 @@ Expected<Path> GadgetHdf5Output::dump(const Storage& storage, const Statistics& 
         saveQuantity<Float>(fileId, "/PartType0/Pressure", QuantityId::PRESSURE, OrderEnum::ZERO, storage);
         saveQuantity<Float>(fileId, "/PartType0/Density", QuantityId::DENSITY, OrderEnum::ZERO, storage);
         saveQuantity<Float>(fileId, "/PartType0/InternalEnergy", QuantityId::ENERGY, OrderEnum::ZERO, storage);
+        saveQuantity<Vector>(fileId, "/PartType0/UVW", QuantityId::UVW, OrderEnum::ZERO, storage);
 
         ArrayView<const Vector> r = storage.getValue<Vector>(QuantityId::POSITION);
         Array<double> smlBuffer(particleCnt);
