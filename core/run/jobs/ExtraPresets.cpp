@@ -34,46 +34,16 @@ PresetRegistrar::PresetRegistrar(String name,
     });
 }
 
-// =========================================================================================================
-// DEFINE YOUR EXTRA PRESETS HERE
-//
-// Usage:
 // REGISTER_PRESET(
 //     "Display Name", 
 //     "Category (optional, or \"\")", 
 //     "Tooltip description", 
 //     [](UniqueNameManager& nameMgr, const Size particleCnt) -> SharedPtr<JobNode> {
-//         // Build your nodes and return the root simulation node
+//         // stuff
 //     }, 
 //     /* isSphSim = */ true
 // );
-// =========================================================================================================
 
-// Example: Simple Basalt Sphere in Equilibrium
-REGISTER_PRESET(
-    "Example Asteroid",
-    "examples",
-    "A self-gravitating Basalt sphere in hydrostatic equilibrium (from ExtraPresets).",
-    [](UniqueNameManager& nameMgr, const Size particleCnt) -> SharedPtr<JobNode> {
-        SharedPtr<JobNode> sphere = makeNode<SphereJob>(nameMgr.getName("shape"));
-        sphere->getSettings().set("radius", 500._f); // 500 km
-
-        SharedPtr<JobNode> mat = makeNode<MaterialJob>(
-            nameMgr.getName("basalt"), 
-            getMaterial(MaterialEnum::BASALT)->getParams()
-        );
-
-        SharedPtr<JobNode> body = makeNode<MonolithicBodyIc>(nameMgr.getName("asteroid body"));
-        body->getSettings().set(BodySettingsId::PARTICLE_COUNT, int(particleCnt));
-        sphere->connect(body, "shape");
-        mat->connect(body, "material");
-
-        SharedPtr<JobNode> sim = makeNode<SphJob>(nameMgr.getName("simulation"));
-        body->connect(sim, "particles");
-        return sim;
-    },
-    true
-);
 
 NAMESPACE_SPH_END
 
